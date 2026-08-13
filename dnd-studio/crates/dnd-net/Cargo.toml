@@ -1,0 +1,6 @@
+[package]
+name = "dnd-net"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

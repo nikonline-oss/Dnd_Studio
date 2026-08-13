@@ -1,0 +1,6 @@
+[package]
+name = "dnd-dsl"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

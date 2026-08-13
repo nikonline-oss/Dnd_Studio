@@ -1,0 +1,292 @@
+:root {
+  color-scheme: dark light;
+  --font-ui: Inter, 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+:root[data-theme='dark'] {
+  --bg: #0e1117;
+  --panel: #151a23;
+  --panel-2: #1b2230;
+  --border: #2b3446;
+  --text: #e7ecf5;
+  --muted: #98a4ba;
+  --accent: #7c5cff;
+  --accent-hover: #8f73ff;
+  --accent-contrast: #ffffff;
+  --danger: #ef4444;
+}
+
+:root[data-theme='light'] {
+  --bg: #f3f5fa;
+  --panel: #ffffff;
+  --panel-2: #eef1f8;
+  --border: #d8deeb;
+  --text: #171c26;
+  --muted: #5c6577;
+  --accent: #6c4cf1;
+  --accent-hover: #5d3de4;
+  --accent-contrast: #ffffff;
+  --danger: #dc2626;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+input,
+select {
+  font: inherit;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+input:focus,
+select:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-color: var(--accent);
+}
+
+.app-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.topbar {
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 10px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar-left,
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar-brand {
+  font-weight: 700;
+}
+
+.topbar-menu {
+  display: flex;
+  gap: 4px;
+}
+
+.menu-item {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 4px 8px;
+}
+
+.menu-item:hover {
+  color: var(--text);
+}
+
+.topbar-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.breadcrumb {
+  color: var(--muted);
+}
+
+.panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+}
+
+.panel-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.panel-tab {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 5px 8px;
+  white-space: nowrap;
+}
+
+.panel-tab.active {
+  color: var(--text);
+  background: var(--panel-2);
+}
+
+.panel-content {
+  flex: 1;
+  min-height: 0;
+  padding: 10px;
+  overflow: auto;
+}
+
+.center-area {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+.empty-state {
+  color: var(--muted);
+}
+
+.workspace-placeholder {
+  max-width: 720px;
+  padding: 24px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  text-align: center;
+}
+
+.workspace-placeholder code {
+  display: inline-block;
+  margin-top: 10px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.start-screen {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.start-card {
+  width: min(720px, calc(100vw - 60px));
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.start-form {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.start-form input {
+  flex: 1;
+}
+
+.recent-campaigns {
+  margin-top: 20px;
+}
+
+.recent-campaigns ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recent-campaigns button {
+  width: 100%;
+  text-align: left;
+}
+
+.error-text {
+  color: var(--danger);
+  margin-top: 10px;
+}
+
+.statusbar {
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 10px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.statusbar-left,
+.statusbar-center,
+.statusbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.resize-handle {
+  background: var(--border);
+  transition: background 120ms ease;
+}
+
+.resize-handle:hover {
+  background: var(--accent);
+}
+
+.resize-handle-horizontal {
+  width: 3px;
+}
+
+.resize-handle-vertical {
+  height: 3px;
+}

@@ -1,0 +1,50 @@
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CampaignSummary {
+    pub id: String,
+    pub name: String,
+    pub file_name: String,
+    pub created_at: i32,
+    pub last_opened_at: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveCampaign {
+    pub id: String,
+    pub name: String,
+    pub path: String,
+    pub meta: HashMap<String, String>,
+}
+
+#[derive(Debug, thiserror::Error, Serialize, specta::Type)]
+#[serde(tag = "kind", content = "message")]
+pub enum AppError {
+    #[error("Database error: {0}")]
+    Db(String),
+
+    #[error("IO error: {0}")]
+    Io(String),
+
+    #[error("Validation error: {0}")]
+    Validation(String),
+
+    #[error("Campaign not found")]
+    NotFound,
+
+    #[error("Campaign is not open")]
+    NoCampaign,
+}
+
+impl AppError {
+    pub fn io(err: impl ToString) -> Self {
+        Self::Io(err.to_string())
+    }
+
+    pub fn db(err: impl ToString) -> Self {
+        Self::Db(err.to_string())
+    }
+}

@@ -1,0 +1,68 @@
+dnd-studio/
+├── Cargo.toml
+├── package.json
+├── vite.config.ts
+├── tsconfig.json
+├── index.html
+├── .gitignore
+├── .prettierrc
+├── eslint.config.js
+├── src/
+│   ├── main.tsx
+│   ├── app/
+│   │   ├── App.tsx
+│   │   └── AppShell.tsx
+│   ├── features/
+│   │   └── campaign-start/
+│   │       └── StartScreen.tsx
+│   ├── shared/
+│   │   ├── api/
+│   │   │   ├── client.ts
+│   │   │   ├── types.ts
+│   │   │   └── hooks.ts
+│   │   ├── hooks/
+│   │   │   ├── useGlobalShortcuts.ts
+│   │   │   └── useThemeEffect.ts
+│   │   ├── stores/
+│   │   │   └── ui.ts
+│   │   └── ui/
+│   │       ├── TopBar.tsx
+│   │       ├── LeftPanel.tsx
+│   │       ├── RightPanel.tsx
+│   │       ├── BottomPanel.tsx
+│   │       ├── CenterArea.tsx
+│   │       └── StatusBar.tsx
+│   └── styles/
+│       └── global.css
+├── crates/
+│   ├── dnd-core/
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       └── lib.rs
+│   ├── dnd-db/
+│   │   ├── Cargo.toml
+│   │   ├── migrations/
+│   │   │   └── 0001_initial.sql
+│   │   └── src/
+│   │       └── lib.rs
+│   ├── dnd-dsl/
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       └── lib.rs
+│   └── dnd-net/
+│       ├── Cargo.toml
+│       └── src/
+│           └── lib.rs
+└── src-tauri/
+    ├── Cargo.toml
+    ├── build.rs
+    ├── tauri.conf.json
+    ├── capabilities/
+    │   └── default.json
+    ├── icons/
+    └── src/
+        ├── main.rs
+        ├── state.rs
+        └── commands/
+            ├── mod.rs
+            └── campaign.rs
