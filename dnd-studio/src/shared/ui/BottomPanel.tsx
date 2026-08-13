@@ -1,10 +1,23 @@
 import clsx from 'clsx';
+
 import { useUiStore, type BottomTab } from '../stores/ui';
 
-const tabs: Array<{ id: BottomTab; label: string }> = [
-  { id: 'chat', label: 'Chat' },
-  { id: 'logs', label: 'Logs' },
-  { id: 'dslTerminal', label: 'DSL Terminal' },
+const tabs: Array<{
+  id: BottomTab;
+  label: string;
+}> = [
+  {
+    id: 'chat',
+    label: 'Chat',
+  },
+  {
+    id: 'logs',
+    label: 'Logs',
+  },
+  {
+    id: 'dslTerminal',
+    label: 'DSL Terminal',
+  },
 ];
 
 export function BottomPanel() {
@@ -12,7 +25,7 @@ export function BottomPanel() {
   const setActiveBottomTab = useUiStore((state) => state.setActiveBottomTab);
 
   return (
-    <section className="panel">
+    <section className="panel bottom-panel">
       <div className="panel-tabs">
         {tabs.map((tab) => (
           <button

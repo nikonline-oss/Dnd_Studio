@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type ThemeMode = 'system' | 'light' | 'dark';
+import { applyThemeMode, type ThemeMode } from '../theme/theme';
+
 
 export type LeftTab = 'navigator' | 'plugins' | 'compendiums';
 export type RightTab = 'inspector' | 'journalToc';
@@ -27,6 +28,13 @@ interface UiState {
   setActiveLeftTab: (tab: LeftTab) => void;
   setActiveRightTab: (tab: RightTab) => void;
   setActiveBottomTab: (tab: BottomTab) => void;
+
+  toggleLeftTab: (tab: LeftTab) => void;
+  toggleRightTab: (tab: RightTab) => void;
+
+  setLeftVisible: (visible: boolean) => void;
+  setRightVisible: (visible: boolean) => void;
+  setBottomVisible: (visible: boolean) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -42,7 +50,11 @@ export const useUiStore = create<UiState>()(
       activeRightTab: 'inspector',
       activeBottomTab: 'chat',
 
-      setThemeMode: (themeMode) => set({ themeMode }),
+      setThemeMode: (mode) => {
+        set({ themeMode: mode });
+
+        applyThemeMode(mode);
+      },
 
       toggleLeft: () =>
         set((state) => ({ leftVisible: !state.leftVisible })),
@@ -56,6 +68,55 @@ export const useUiStore = create<UiState>()(
       setActiveLeftTab: (activeLeftTab) => set({ activeLeftTab }),
       setActiveRightTab: (activeRightTab) => set({ activeRightTab }),
       setActiveBottomTab: (activeBottomTab) => set({ activeBottomTab }),
+      
+      setLeftVisible: (leftVisible) => set({ leftVisible }),
+      setRightVisible: (rightVisible) => set({ rightVisible }),
+      setBottomVisible: (bottomVisible) => set({ bottomVisible }),
+      toggleLeftTab: (tab) =>
+        set((state) => {
+          // Если левая панель скрыта — открываем её и выбираем таб.
+          if (!state.leftVisible) {
+            return {
+              leftVisible: true,
+              activeLeftTab: tab,
+            };
+          }
+
+          // Если панель открыта и клик по тому же табу — скрываем панель.
+          if (state.activeLeftTab === tab) {
+            return {
+              leftVisible: false,
+            };
+          }
+
+          // Если панель открыта и клик по другому табу — переключаем таб.
+          return {
+            activeLeftTab: tab,
+          };
+        }),
+
+      toggleRightTab: (tab) =>
+        set((state) => {
+          // Если правая панель скрыта — открываем её и выбираем таб.
+          if (!state.rightVisible) {
+            return {
+              rightVisible: true,
+              activeRightTab: tab,
+            };
+          }
+
+          // Если панель открыта и клик по тому же табу — скрываем панель.
+          if (state.activeRightTab === tab) {
+            return {
+              rightVisible: false,
+            };
+          }
+
+          // Если панель открыта и клик по другому табу — переключаем таб.
+          return {
+            activeRightTab: tab,
+          };
+        }),
     }),
     {
       name: 'dndstudio.ui',

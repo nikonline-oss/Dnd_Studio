@@ -1,33 +1,10 @@
-import clsx from 'clsx';
-import { useUiStore, type LeftTab } from '../stores/ui';
-
-const tabs: Array<{ id: LeftTab; label: string }> = [
-  { id: 'navigator', label: 'Navigator' },
-  { id: 'plugins', label: 'Plugins' },
-  { id: 'compendiums', label: 'Compendiums' },
-];
+import { useUiStore } from '../stores/ui';
 
 export function LeftPanel() {
   const activeLeftTab = useUiStore((state) => state.activeLeftTab);
-  const setActiveLeftTab = useUiStore((state) => state.setActiveLeftTab);
 
   return (
-    <aside className="panel">
-      <div className="panel-tabs">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            className={clsx('panel-tab', {
-              active: activeLeftTab === tab.id,
-            })}
-            onClick={() => setActiveLeftTab(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
+    <aside className="panel left-panel" aria-label="Left panel content">
       <div className="panel-content">
         {activeLeftTab === 'navigator' && (
           <div className="empty-state">Campaign navigator will appear here.</div>

@@ -1,8 +1,18 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
 import { AppShell } from './app/AppShell';
+import { useUiStore } from './shared/stores/ui';
+import { applyThemeMode } from './shared/theme/theme';
+
 import './styles/global.css';
+
+applyThemeMode(useUiStore.getState().themeMode);
+
+useUiStore.persist.onFinishHydration(() => {
+  applyThemeMode(useUiStore.getState().themeMode);
+});
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -6,6 +6,7 @@ const menuItems = ['File', 'Edit', 'View', 'Tools', 'Help'];
 export function TopBar() {
   const themeMode = useUiStore((state) => state.themeMode);
   const setThemeMode = useUiStore((state) => state.setThemeMode);
+
   const toggleLeft = useUiStore((state) => state.toggleLeft);
   const toggleRight = useUiStore((state) => state.toggleRight);
   const toggleBottom = useUiStore((state) => state.toggleBottom);
@@ -28,7 +29,7 @@ export function TopBar() {
 
       <div className="topbar-center">
         <span className="breadcrumb">
-            {activeCampaign ? activeCampaign.name : 'No campaign'}
+          {activeCampaign ? activeCampaign.name : 'No campaign'}
         </span>
       </div>
 

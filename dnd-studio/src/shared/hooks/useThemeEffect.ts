@@ -1,35 +1,29 @@
-import { useEffect } from 'react';
+import { useLayoutEffect } from 'react';
+
 import { useUiStore } from '../stores/ui';
-
-function applyTheme() {
-  const themeMode = useUiStore.getState().themeMode;
-  const media = window.matchMedia('(prefers-color-scheme: dark)');
-
-  const resolved =
-    themeMode === 'system' ? (media.matches ? 'dark' : 'light') : themeMode;
-
-  document.documentElement.dataset.theme = resolved;
-}
+import { applyThemeMode } from '../theme/theme';
 
 export function useThemeEffect() {
-  useEffect(() => {
-    applyTheme();
+  useLayoutEffect(() => {
+    applyThemeMode(useUiStore.getState().themeMode);
 
     const unsubscribe = useUiStore.subscribe(() => {
-      applyTheme();
+      applyThemeMode(useUiStore.getState().themeMode);
     });
 
     const media = window.matchMedia('(prefers-color-scheme: dark)');
 
-    const listener = () => {
-      applyTheme();
+    const onSystemThemeChange = () => {
+      if (useUiStore.getState().themeMode === 'system') {
+        applyThemeMode(useUiStore.getState().themeMode);
+      }
     };
 
-    media.addEventListener('change', listener);
+    media.addEventListener('change', onSystemThemeChange);
 
     return () => {
       unsubscribe();
-      media.removeEventListener('change', listener);
+      media.removeEventListener('change', onSystemThemeChange);
     };
   }, []);
 }
