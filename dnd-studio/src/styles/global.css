@@ -982,3 +982,9 @@ select:focus-visible {
   color: var(--muted);
   font-size: 12px;
 }
+
+.map-tab-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

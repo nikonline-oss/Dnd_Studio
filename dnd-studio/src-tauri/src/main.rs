@@ -7,6 +7,12 @@ use commands::campaign::{
     close_campaign, create_campaign, get_active_campaign, list_campaigns, open_campaign,
 };
 use commands::maps::{create_map, list_maps, get_map};
+use commands::tokens::{
+    create_token,
+    delete_token,
+    list_tokens,
+    move_token,
+};
 use state::{AppPaths, AppState};
 use tauri::Manager;
 use specta_typescript::Typescript;
@@ -23,7 +29,11 @@ fn main() {
         get_active_campaign,
         create_map,
         list_maps,
-        get_map
+        get_map,
+        create_token,
+        list_tokens,
+        move_token,
+        delete_token
     ]);
 
     #[cfg(debug_assertions)]

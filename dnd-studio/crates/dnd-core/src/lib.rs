@@ -32,6 +32,18 @@ pub struct MapSummary {
     pub height: i32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenSummary {
+    pub id: String,
+    pub map_id: String,
+    pub character_id: Option<String>,
+    pub x: f64,
+    pub y: f64,
+    pub rotation: f64,
+    pub is_visible: bool,
+}
+
 #[derive(Debug, thiserror::Error, Serialize, specta::Type)]
 #[serde(tag = "kind", content = "message")]
 pub enum AppError {

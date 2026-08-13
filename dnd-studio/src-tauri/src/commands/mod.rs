@@ -1,4 +1,5 @@
 pub mod campaign;
+pub mod tokens;
 pub mod maps;
 
 use dnd_core::AppError;

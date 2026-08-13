@@ -1,4 +1,4 @@
-use dnd_core::{AppError, CampaignSummary, MapSummary};
+use dnd_core::{AppError, CampaignSummary, MapSummary, TokenSummary};
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::SqlitePool;
@@ -198,6 +198,7 @@ impl CampaignDb {
             )
             .collect())
     }
+
     pub async fn get_map(&self, id: &str) -> Result<Option<MapSummary>, AppError> {
         let row = sqlx::query_as::<_, (String, String, String, String, i32, i32, i32)>(
             r#"
@@ -230,6 +231,136 @@ impl CampaignDb {
             },
         ))
     }
+
+    pub async fn create_token(
+        &self,
+        map_id: &str,
+        x: f64,
+        y: f64,
+    ) -> Result<TokenSummary, AppError> {
+        let id = uuid::Uuid::new_v4().to_string();
+
+        sqlx::query(
+            r#"
+        INSERT INTO tokens (
+            id,
+            map_id,
+            character_id,
+            x,
+            y,
+            rotation,
+            is_visible
+        )
+        VALUES (?, ?, NULL, ?, ?, 0, 1)
+        "#,
+        )
+        .bind(&id)
+        .bind(map_id)
+        .bind(x)
+        .bind(y)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(TokenSummary {
+            id,
+            map_id: map_id.to_string(),
+            character_id: None,
+            x,
+            y,
+            rotation: 0.0,
+            is_visible: true,
+        })
+    }
+
+    pub async fn list_tokens(&self, map_id: &str) -> Result<Vec<TokenSummary>, AppError> {
+        let rows = sqlx::query_as::<_, (String, String, Option<String>, f64, f64, f64, i32)>(
+            r#"
+        SELECT
+            id,
+            map_id,
+            character_id,
+            x,
+            y,
+            rotation,
+            is_visible
+        FROM tokens
+        WHERE map_id = ?
+        ORDER BY rowid
+        "#,
+        )
+        .bind(map_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(rows.into_iter().map(row_to_token).collect())
+    }
+
+    pub async fn move_token(
+        &self,
+        token_id: &str,
+        x: f64,
+        y: f64,
+    ) -> Result<TokenSummary, AppError> {
+        let result = sqlx::query(
+            r#"
+        UPDATE tokens
+        SET x = ?, y = ?
+        WHERE id = ?
+        "#,
+        )
+        .bind(x)
+        .bind(y)
+        .bind(token_id)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        self.fetch_token(token_id).await
+    }
+
+    pub async fn delete_token(&self, token_id: &str) -> Result<(), AppError> {
+        let result = sqlx::query("DELETE FROM tokens WHERE id = ?")
+            .bind(token_id)
+            .execute(&self.pool)
+            .await
+            .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        Ok(())
+    }
+
+    async fn fetch_token(&self, token_id: &str) -> Result<TokenSummary, AppError> {
+        let row = sqlx::query_as::<_, (String, String, Option<String>, f64, f64, f64, i32)>(
+            r#"
+        SELECT
+            id,
+            map_id,
+            character_id,
+            x,
+            y,
+            rotation,
+            is_visible
+        FROM tokens
+        WHERE id = ?
+        "#,
+        )
+        .bind(token_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(AppError::db)?
+        .ok_or(AppError::NotFound)?;
+
+        Ok(row_to_token(row))
+    }
 }
 
 async fn connect(path: &Path, create_if_missing: bool) -> Result<SqlitePool, AppError> {
@@ -254,6 +385,22 @@ async fn connect(path: &Path, create_if_missing: bool) -> Result<SqlitePool, App
         .map_err(AppError::db)?;
 
     Ok(pool)
+}
+
+fn row_to_token(
+    row: (String, String, Option<String>, f64, f64, f64, i32),
+) -> TokenSummary {
+    let (id, map_id, character_id, x, y, rotation, is_visible) = row;
+
+    TokenSummary {
+        id,
+        map_id,
+        character_id,
+        x,
+        y,
+        rotation,
+        is_visible: is_visible != 0,
+    }
 }
 
 pub fn now_unix() -> i32 {

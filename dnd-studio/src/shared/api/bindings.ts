@@ -25,6 +25,10 @@ export const commands = {
 	width: number,
 	height: number,
 } | null, AppError>(__TAURI_INVOKE("get_map", { id })),
+	createToken: (mapId: string, x: number | null, y: number | null) => typedError<TokenSummary, AppError>(__TAURI_INVOKE("create_token", { mapId, x, y })),
+	listTokens: (mapId: string) => typedError<TokenSummary[], AppError>(__TAURI_INVOKE("list_tokens", { mapId })),
+	moveToken: (tokenId: string, x: number | null, y: number | null) => typedError<TokenSummary, AppError>(__TAURI_INVOKE("move_token", { tokenId, x, y })),
+	deleteToken: (tokenId: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_token", { tokenId })),
 };
 
 /* Types */
@@ -53,6 +57,16 @@ export type MapSummary = {
 	gridSize: number,
 	width: number,
 	height: number,
+};
+
+export type TokenSummary = {
+	id: string,
+	mapId: string,
+	characterId: string | null,
+	x: number | null,
+	y: number | null,
+	rotation: number | null,
+	isVisible: boolean,
 };
 
 /* Tauri Specta runtime */
