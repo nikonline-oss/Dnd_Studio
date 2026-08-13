@@ -1,1 +1,15 @@
 pub mod campaign;
+pub mod maps;
+
+use dnd_core::AppError;
+use dnd_db::CampaignDb;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+pub async fn require_db(
+    campaign: &Arc<Mutex<Option<CampaignDb>>>,
+) -> Result<CampaignDb, AppError> {
+    let current = campaign.lock().await;
+
+    current.clone().ok_or(AppError::NoCampaign)
+}

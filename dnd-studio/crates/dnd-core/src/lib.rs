@@ -20,6 +20,18 @@ pub struct ActiveCampaign {
     pub meta: HashMap<String, String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct MapSummary {
+    pub id: String,
+    pub world_id: String,
+    pub name: String,
+    pub image_path: String,
+    pub grid_size: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
 #[derive(Debug, thiserror::Error, Serialize, specta::Type)]
 #[serde(tag = "kind", content = "message")]
 pub enum AppError {

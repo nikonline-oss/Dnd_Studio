@@ -1,4 +1,4 @@
-use dnd_core::{AppError, CampaignSummary};
+use dnd_core::{AppError, CampaignSummary, MapSummary};
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::SqlitePool;
@@ -73,6 +73,130 @@ impl CampaignDb {
             .map_err(AppError::db)?;
 
         Ok(rows.into_iter().collect())
+    }
+
+    pub async fn default_world_id(&self) -> Result<String, AppError> {
+        let existing = sqlx::query_scalar::<_, String>(
+            "SELECT id FROM worlds ORDER BY sort_order, rowid LIMIT 1",
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        if let Some(id) = existing {
+            return Ok(id);
+        }
+
+        let id = uuid::Uuid::new_v4().to_string();
+
+        sqlx::query("INSERT INTO worlds (id, name, sort_order) VALUES (?, ?, 0)")
+            .bind(&id)
+            .bind("Default")
+            .execute(&self.pool)
+            .await
+            .map_err(AppError::db)?;
+
+        Ok(id)
+    }
+
+    pub async fn create_map(
+        &self,
+        world_id: &str,
+        name: &str,
+        width: i32,
+        height: i32,
+        grid_size: i32,
+    ) -> Result<MapSummary, AppError> {
+        let name = name.trim().to_string();
+
+        if name.is_empty() {
+            return Err(AppError::Validation("Map name is required".to_string()));
+        }
+
+        if width <= 0 || height <= 0 {
+            return Err(AppError::Validation(
+                "Map width and height must be positive".to_string(),
+            ));
+        }
+
+        if grid_size <= 0 {
+            return Err(AppError::Validation(
+                "Grid size must be positive".to_string(),
+            ));
+        }
+
+        let id = uuid::Uuid::new_v4().to_string();
+        let image_path = format!("assets/maps/{id}.png");
+
+        sqlx::query(
+            r#"
+        INSERT INTO maps (
+            id,
+            world_id,
+            name,
+            image_path,
+            grid_size,
+            width,
+            height
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        "#,
+        )
+        .bind(&id)
+        .bind(world_id)
+        .bind(&name)
+        .bind(&image_path)
+        .bind(grid_size)
+        .bind(width)
+        .bind(height)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(MapSummary {
+            id,
+            world_id: world_id.to_string(),
+            name,
+            image_path,
+            grid_size,
+            width,
+            height,
+        })
+    }
+
+    pub async fn list_maps(&self) -> Result<Vec<MapSummary>, AppError> {
+        let rows = sqlx::query_as::<_, (String, String, String, String, i32, i32, i32)>(
+            r#"
+            SELECT
+                id,
+                world_id,
+                name,
+                image_path,
+                grid_size,
+                width,
+                height
+            FROM maps
+            ORDER BY name
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(id, world_id, name, image_path, grid_size, width, height)| MapSummary {
+                    id,
+                    world_id,
+                    name,
+                    image_path,
+                    grid_size,
+                    width,
+                    height,
+                },
+            )
+            .collect())
     }
 }
 
@@ -199,5 +323,30 @@ mod tests {
         let reopened = CampaignDb::open(&path).await.unwrap();
         let meta = reopened.meta().await.unwrap();
         assert_eq!(meta.get("id").unwrap(), "test-id");
+    }
+
+    #[tokio::test]
+    async fn create_default_world_and_map() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("maps-test.db");
+
+        let db = CampaignDb::create(&path).await.unwrap();
+
+        let world_id = db.default_world_id().await.unwrap();
+        assert!(!world_id.is_empty());
+
+        let map = db
+            .create_map(&world_id, "Battle Map", 2000, 1500, 50)
+            .await
+            .unwrap();
+
+        assert_eq!(map.name, "Battle Map");
+        assert_eq!(map.width, 2000);
+        assert_eq!(map.height, 1500);
+        assert_eq!(map.grid_size, 50);
+
+        let maps = db.list_maps().await.unwrap();
+        assert_eq!(maps.len(), 1);
+        assert_eq!(maps[0].name, "Battle Map");
     }
 }

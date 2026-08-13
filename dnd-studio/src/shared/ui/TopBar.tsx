@@ -1,4 +1,5 @@
-import { useUiStore, type ThemeMode } from '../stores/ui';
+import { useUiStore } from '../stores/ui';
+import { type ThemeMode } from '../theme/theme'
 import { useActiveCampaign } from '../api/hooks';
 
 const menuItems = ['File', 'Edit', 'View', 'Tools', 'Help'];

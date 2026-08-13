@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { commands, type AppError, type CampaignSummary } from './bindings';
+import { commands } from './bindings';
 
 async function unwrap<T, E extends { kind: string; message?: string }>(
   promise: Promise<{ status: "ok"; data: T } | { status: "error"; error: E }>
@@ -57,6 +57,27 @@ export function useOpenCampaign() {
     },
     onError: (error: Error) => {
       console.error('Failed to open campaign:', error.message);
+    },
+  });
+}
+
+
+export function useMaps(enabled: boolean) {
+  return useQuery({
+    queryKey: ['maps'],
+    queryFn: () => unwrap(commands.listMaps()),
+    enabled,
+    retry: false,
+  });
+}
+
+export function useCreateMap() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ name, width, height, grid_size }: { name: string; width: number; height: number; grid_size: number }) => unwrap(commands.createMap(name, width, height, grid_size)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['maps'] });
     },
   });
 }

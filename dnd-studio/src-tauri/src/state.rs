@@ -9,6 +9,7 @@ pub struct AppState {
 }
 
 pub struct AppPaths {
+    #[allow(dead_code)]
     pub data_dir: PathBuf,
     pub campaigns_dir: PathBuf,
     pub index_file: PathBuf,

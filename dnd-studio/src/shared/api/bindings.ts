@@ -14,6 +14,8 @@ export const commands = {
 	path: string,
 	meta: { [key in string]: string },
 } | null, AppError>(__TAURI_INVOKE("get_active_campaign")),
+	createMap: (name: string, width: number, height: number, gridSize: number) => typedError<MapSummary, AppError>(__TAURI_INVOKE("create_map", { name, width, height, gridSize })),
+	listMaps: () => typedError<MapSummary[], AppError>(__TAURI_INVOKE("list_maps")),
 };
 
 /* Types */
@@ -32,6 +34,16 @@ export type CampaignSummary = {
 	fileName: string,
 	createdAt: number,
 	lastOpenedAt: number | null,
+};
+
+export type MapSummary = {
+	id: string,
+	worldId: string,
+	name: string,
+	imagePath: string,
+	gridSize: number,
+	width: number,
+	height: number,
 };
 
 /* Tauri Specta runtime */

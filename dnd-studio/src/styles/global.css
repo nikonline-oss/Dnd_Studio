@@ -80,8 +80,8 @@
 :root[data-theme='light'] {
   color-scheme: light;
 
-  --bg: #f3efe3;
-  --bg-top: #fbf8ef;
+  --bg: #f3f1e3;
+  --bg-top: #fbf9ef;
 
   --panel: #fffdf7;
   --panel-2: #f3ecda;
@@ -97,8 +97,8 @@
   --accent-contrast: #ffffff;
   --danger: #dc2626;
 
-  --gold: #9a7212;
-  --gold-strong: #8a650f;
+  --gold: #9a9812;
+  --gold-strong: #8a780f;
 
   --gold-soft: rgba(164, 119, 20, 0.16);
   --gold-softer: rgba(164, 119, 20, 0.08);
@@ -106,13 +106,13 @@
   --border-gold: rgba(164, 119, 20, 0.3);
   --border-gold-strong: rgba(164, 119, 20, 0.58);
 
-  --bg-glow-1: rgba(124, 92, 255, 0.08);
-  --bg-glow-2: rgba(164, 119, 20, 0.12);
-  --bg-glow-3: rgba(59, 130, 246, 0.06);
+  --bg-glow-1: rgba(125, 92, 255, 0.308);
+  --bg-glow-2: rgba(164, 162, 20, 0.178);
+  --bg-glow-3: rgba(59, 131, 246, 0.164);
 
   --surface-sheen: rgba(255, 255, 255, 0.5);
-  --grid-line: rgba(97, 73, 15, 0.05);
-  --shadow: rgba(35, 25, 5, 0.12);
+  --grid-line: rgba(97, 85, 15, 0.055);
+  --shadow: rgba(39, 49, 6, 0.12);
 }
 
 * {
@@ -683,4 +683,56 @@ select:focus-visible {
 
 .resize-handle-hidden.resize-handle-vertical {
   height: 0 !important;
+}
+
+.navigator {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.navigator-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.navigator-section-title {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.navigator-form {
+  display: flex;
+  gap: 6px;
+}
+
+.navigator-form input {
+  flex: 1;
+  min-width: 0;
+}
+
+.navigator-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.navigator-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+}
+
+.navigator-item small {
+  color: var(--muted);
 }
