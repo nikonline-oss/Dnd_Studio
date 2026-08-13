@@ -1,5 +1,7 @@
 import { useMap } from '../../shared/api/hooks';
 
+import { MapCanvas } from './MapCanvas';
+
 export function MapTab({ mapId }: { mapId?: string }) {
   const { data: map, isLoading } = useMap(mapId);
 
@@ -28,20 +30,16 @@ export function MapTab({ mapId }: { mapId?: string }) {
   }
 
   return (
-    <div className="map-placeholder">
-      <div className="map-placeholder-card">
-        <h3>{map.name}</h3>
+    <div className="map-tab">
+      <div className="map-tab-header">
+        <span>{map.name}</span>
 
-        <p>
+        <span>
           {map.width} × {map.height} · grid {map.gridSize}px
-        </p>
-
-        <p>
-          Map renderer will be added in the next Stage 2 part.
-        </p>
-
-        <code>{map.imagePath}</code>
+        </span>
       </div>
+
+      <MapCanvas map={map} />
     </div>
   );
 }
