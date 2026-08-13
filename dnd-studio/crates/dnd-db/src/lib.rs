@@ -198,6 +198,38 @@ impl CampaignDb {
             )
             .collect())
     }
+    pub async fn get_map(&self, id: &str) -> Result<Option<MapSummary>, AppError> {
+        let row = sqlx::query_as::<_, (String, String, String, String, i32, i32, i32)>(
+            r#"
+        SELECT
+            id,
+            world_id,
+            name,
+            image_path,
+            grid_size,
+            width,
+            height
+        FROM maps
+        WHERE id = ?
+        "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(row.map(
+            |(id, world_id, name, image_path, grid_size, width, height)| MapSummary {
+                id,
+                world_id,
+                name,
+                image_path,
+                grid_size,
+                width,
+                height,
+            },
+        ))
+    }
 }
 
 async fn connect(path: &Path, create_if_missing: bool) -> Result<SqlitePool, AppError> {
@@ -348,5 +380,9 @@ mod tests {
         let maps = db.list_maps().await.unwrap();
         assert_eq!(maps.len(), 1);
         assert_eq!(maps[0].name, "Battle Map");
+
+        let fetched = db.get_map(&map.id).await.unwrap().unwrap();
+        assert_eq!(fetched.id, map.id);
+        assert_eq!(fetched.name, "Battle Map");
     }
 }

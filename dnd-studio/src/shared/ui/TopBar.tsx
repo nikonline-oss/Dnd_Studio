@@ -1,6 +1,6 @@
 import { useUiStore } from '../stores/ui';
-import { type ThemeMode } from '../theme/theme'
-import { useActiveCampaign } from '../api/hooks';
+import { type ThemeMode } from '../theme/theme';
+import { useActiveCampaign, useCloseCampaign } from '../api/hooks';
 
 const menuItems = ['File', 'Edit', 'View', 'Tools', 'Help'];
 
@@ -13,6 +13,7 @@ export function TopBar() {
   const toggleBottom = useUiStore((state) => state.toggleBottom);
 
   const { data: activeCampaign } = useActiveCampaign();
+  const closeCampaign = useCloseCampaign();
 
   return (
     <header className="topbar">
@@ -29,18 +30,32 @@ export function TopBar() {
       </div>
 
       <div className="topbar-center">
-        <span className="breadcrumb">
-          {activeCampaign ? activeCampaign.name : 'No campaign'}
-        </span>
+        {activeCampaign ? (
+          <div className="topbar-campaign">
+            <span className="breadcrumb">{activeCampaign.name}</span>
+
+            <button
+              type="button"
+              onClick={() => closeCampaign.mutate()}
+              disabled={closeCampaign.isPending}
+            >
+              {closeCampaign.isPending ? 'Closing…' : 'Switch campaign'}
+            </button>
+          </div>
+        ) : (
+          <span className="breadcrumb">No campaign</span>
+        )}
       </div>
 
       <div className="topbar-right">
         <button type="button" onClick={toggleLeft}>
           Left
         </button>
+
         <button type="button" onClick={toggleBottom}>
           Bottom
         </button>
+
         <button type="button" onClick={toggleRight}>
           Right
         </button>

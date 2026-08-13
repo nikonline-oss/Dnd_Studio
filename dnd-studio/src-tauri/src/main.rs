@@ -6,7 +6,7 @@ mod state;
 use commands::campaign::{
     close_campaign, create_campaign, get_active_campaign, list_campaigns, open_campaign,
 };
-use commands::maps::{create_map, list_maps};
+use commands::maps::{create_map, list_maps, get_map};
 use state::{AppPaths, AppState};
 use tauri::Manager;
 use specta_typescript::Typescript;
@@ -22,7 +22,8 @@ fn main() {
         close_campaign,
         get_active_campaign,
         create_map,
-        list_maps
+        list_maps,
+        get_map
     ]);
 
     #[cfg(debug_assertions)]

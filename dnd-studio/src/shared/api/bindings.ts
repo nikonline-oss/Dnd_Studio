@@ -16,6 +16,15 @@ export const commands = {
 } | null, AppError>(__TAURI_INVOKE("get_active_campaign")),
 	createMap: (name: string, width: number, height: number, gridSize: number) => typedError<MapSummary, AppError>(__TAURI_INVOKE("create_map", { name, width, height, gridSize })),
 	listMaps: () => typedError<MapSummary[], AppError>(__TAURI_INVOKE("list_maps")),
+	getMap: (id: string) => typedError<{
+	id: string,
+	worldId: string,
+	name: string,
+	imagePath: string,
+	gridSize: number,
+	width: number,
+	height: number,
+} | null, AppError>(__TAURI_INVOKE("get_map", { id })),
 };
 
 /* Types */

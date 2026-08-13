@@ -1,18 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { commands } from './bindings';
+import { useWorkspaceStore } from '../stores/workspace';
 
 async function unwrap<T, E extends { kind: string; message?: string }>(
   promise: Promise<{ status: "ok"; data: T } | { status: "error"; error: E }>
 ): Promise<T> {
   const result = await promise;
-  
+
   if (result.status === "ok") {
     return result.data;
   }
-  
+
   const error = result.error;
   const message = 'message' in error ? error.message : 'Unknown error';
-  
+
   throw new Error(`[${error.kind}] ${message}`);
 }
 
@@ -61,12 +62,36 @@ export function useOpenCampaign() {
   });
 }
 
+export function useCloseCampaign() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => unwrap(commands.closeCampaign()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['activeCampaign'] });
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['maps'] });
+
+      useWorkspaceStore.getState().clearLastCampaign();
+    },
+  });
+}
+
 
 export function useMaps(enabled: boolean) {
   return useQuery({
     queryKey: ['maps'],
     queryFn: () => unwrap(commands.listMaps()),
     enabled,
+    retry: false,
+  });
+}
+
+export function useMap(id?: string) {
+  return useQuery({
+    queryKey: ['map', id],
+    queryFn: () => unwrap(commands.getMap(id!)),
+    enabled: Boolean(id),
     retry: false,
   });
 }

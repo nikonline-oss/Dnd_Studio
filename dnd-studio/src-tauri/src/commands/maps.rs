@@ -28,3 +28,14 @@ pub async fn list_maps(
 
     db.list_maps().await
 }
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_map(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<Option<MapSummary>, AppError> {
+    let db = require_db(&state.campaign).await?;
+
+    db.get_map(&id).await
+}

@@ -1,5 +1,3 @@
-import { useUiStore } from '../stores/ui';
-
 import { FormEvent, useState } from 'react';
 
 import {
@@ -7,13 +5,17 @@ import {
   useCreateMap,
   useMaps,
 } from '../api/hooks';
+import { useUiStore } from '../stores/ui';
+import { useWorkspaceStore } from '../stores/workspace';
 
 function NavigatorPanel() {
   const [newMapName, setNewMapName] = useState('');
 
   const { data: activeCampaign } = useActiveCampaign();
   const { data: maps = [], isLoading } = useMaps(Boolean(activeCampaign));
+
   const createMap = useCreateMap();
+  const openMapTab = useWorkspaceStore((state) => state.openMapTab);
 
   if (!activeCampaign) {
     return (
@@ -78,7 +80,11 @@ function NavigatorPanel() {
         <ul className="navigator-list">
           {maps.map((map) => (
             <li key={map.id}>
-              <button type="button" className="navigator-item">
+              <button
+                type="button"
+                className="navigator-item"
+                onClick={() => openMapTab(map)}
+              >
                 <span>{map.name}</span>
                 <small>
                   {map.width}×{map.height}
@@ -92,14 +98,13 @@ function NavigatorPanel() {
   );
 }
 
-
 export function LeftPanel() {
   const activeLeftTab = useUiStore((state) => state.activeLeftTab);
 
   return (
     <aside className="panel left-panel" aria-label="Left panel content">
       <div className="panel-content">
-        {activeLeftTab === 'navigator' && <NavigatorPanel /> }
+        {activeLeftTab === 'navigator' && <NavigatorPanel />}
 
         {activeLeftTab === 'plugins' && (
           <div className="empty-state">Plugin browser will appear here.</div>
