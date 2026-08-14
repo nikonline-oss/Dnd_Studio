@@ -10,6 +10,7 @@ import {
   useMoveToken,
   useTokens,
 } from '../../shared/api/hooks';
+import { useMapSettingsStore } from '../../shared/stores/mapSettings';
 
 import { MapCanvas } from './MapCanvas';
 
@@ -22,6 +23,10 @@ export function MapTab({ mapId }: { mapId?: string }) {
   const moveToken = useMoveToken();
   const deleteToken = useDeleteToken();
   const importMapImage = useImportMapImage();
+  const showGridByMap = useMapSettingsStore((state) => state.showGridByMap);
+  const toggleGrid = useMapSettingsStore((state) => state.toggleGrid);
+
+  const showGrid = map ? (showGridByMap[map.id ?? ''] ?? true) : true;
 
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [pendingDeleteTokenIds, setPendingDeleteTokenIds] = useState<string[]>([]);
@@ -155,6 +160,14 @@ export function MapTab({ mapId }: { mapId?: string }) {
           >
             {importMapImage.isPending ? 'Loading…' : 'Load image'}
           </button>
+          <label className="map-grid-toggle">
+            <input
+              type="checkbox"
+              checked={showGrid}
+              onChange={() => toggleGrid(map.id)}
+            />
+            Grid
+          </label>
           <select
             value={selectedCharacterId}
             onChange={(event) => setSelectedCharacterId(event.target.value)}
@@ -197,6 +210,7 @@ export function MapTab({ mapId }: { mapId?: string }) {
         selectedTokenId={selectedTokenId}
         onSelectToken={setSelectedTokenId}
         onMoveToken={handleMoveToken}
+        showGrid={showGrid}
       />
     </div>
   );

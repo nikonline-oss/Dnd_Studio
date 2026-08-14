@@ -1523,3 +1523,18 @@ select:focus-visible {
   font-size: 13px;
   line-height: 1.5;
 }
+
+.map-grid-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  color: var(--muted);
+  font-size: 12px;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.map-grid-toggle input {
+  margin: 0;
+}

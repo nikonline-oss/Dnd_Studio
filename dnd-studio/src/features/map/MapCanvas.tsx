@@ -23,6 +23,7 @@ interface MapCanvasProps {
         x: number,
         y: number,
     ) => Promise<void>;
+    showGrid?: boolean;
 }
 
 type DragState =
@@ -96,6 +97,7 @@ export function MapCanvas({
     selectedTokenId = null,
     onSelectToken,
     onMoveToken,
+    showGrid = true,
 }: MapCanvasProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -458,30 +460,32 @@ export function MapCanvas({
         }
 
         // Сетка.
-        const gridSize = map.gridSize > 0 ? map.gridSize : 50;
+        if (showGrid) {
+            const gridSize = map.gridSize > 0 ? map.gridSize : 50;
 
-        let gridStep = gridSize;
-        const screenStep = gridStep * viewport.scale;
+            let gridStep = gridSize;
+            const screenStep = gridStep * viewport.scale;
 
-        if (screenStep < 8) {
-            gridStep *= Math.ceil(8 / screenStep);
+            if (screenStep < 8) {
+                gridStep *= Math.ceil(8 / screenStep);
+            }
+
+            ctx.beginPath();
+            ctx.strokeStyle = gridColor;
+            ctx.lineWidth = 1 / viewport.scale;
+
+            for (let x = 0; x <= map.width; x += gridStep) {
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, map.height);
+            }
+
+            for (let y = 0; y <= map.height; y += gridStep) {
+                ctx.moveTo(0, y);
+                ctx.lineTo(map.width, y);
+            }
+
+            ctx.stroke();
         }
-
-        ctx.beginPath();
-        ctx.strokeStyle = gridColor;
-        ctx.lineWidth = 1 / viewport.scale;
-
-        for (let x = 0; x <= map.width; x += gridStep) {
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, map.height);
-        }
-
-        for (let y = 0; y <= map.height; y += gridStep) {
-            ctx.moveTo(0, y);
-            ctx.lineTo(map.width, y);
-        }
-
-        ctx.stroke();
 
         // Граница карты.
         ctx.strokeStyle = borderColor;
@@ -559,6 +563,7 @@ export function MapCanvas({
         themeVersion,
         imageVersion,
         getTokenPosition,
+        showGrid
     ]);
 
     const onPointerDown = (

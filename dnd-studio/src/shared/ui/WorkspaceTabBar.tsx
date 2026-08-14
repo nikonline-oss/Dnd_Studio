@@ -24,6 +24,13 @@ export function WorkspaceTabBar() {
               active,
             })}
             onClick={() => setActiveTab(tab.id)}
+            onMouseDown={(event) => {
+              if (event.button === 1) {
+                event.preventDefault();
+                event.stopPropagation();
+                closeTab(tab.id);
+              }
+            }}
             role="tab"
             aria-selected={active}
           >
