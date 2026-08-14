@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-
+import { InitiativePanel } from '../../features/initiative/InitiativePanel';
 import { useUiStore, type BottomTab } from '../stores/ui';
 
 const tabs: Array<{
@@ -17,6 +17,10 @@ const tabs: Array<{
   {
     id: 'dslTerminal',
     label: 'DSL Terminal',
+  },
+  {
+    id: 'initiative',
+    label: 'Initiative',
   },
 ];
 
@@ -52,6 +56,10 @@ export function BottomPanel() {
 
         {activeBottomTab === 'dslTerminal' && (
           <div className="empty-state">DSL terminal is planned for Phase 2+.</div>
+        )}
+
+        {activeBottomTab === 'initiative' && (
+          <InitiativePanel />
         )}
       </div>
     </section>

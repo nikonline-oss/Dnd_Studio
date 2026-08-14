@@ -6,7 +6,7 @@ import { applyThemeMode, type ThemeMode } from '../theme/theme';
 
 export type LeftTab = 'navigator' | 'plugins' | 'compendiums';
 export type RightTab = 'inspector' | 'journalToc';
-export type BottomTab = 'chat' | 'logs' | 'dslTerminal';
+export type BottomTab = 'chat' | 'logs' | 'dslTerminal' | 'initiative';
 
 interface UiState {
   themeMode: ThemeMode;
@@ -68,7 +68,7 @@ export const useUiStore = create<UiState>()(
       setActiveLeftTab: (activeLeftTab) => set({ activeLeftTab }),
       setActiveRightTab: (activeRightTab) => set({ activeRightTab }),
       setActiveBottomTab: (activeBottomTab) => set({ activeBottomTab }),
-      
+
       setLeftVisible: (leftVisible) => set({ leftVisible }),
       setRightVisible: (rightVisible) => set({ rightVisible }),
       setBottomVisible: (bottomVisible) => set({ bottomVisible }),
