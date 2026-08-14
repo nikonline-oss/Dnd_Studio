@@ -29,6 +29,7 @@ export const commands = {
 	listTokens: (mapId: string) => typedError<TokenSummary[], AppError>(__TAURI_INVOKE("list_tokens", { mapId })),
 	moveToken: (tokenId: string, x: number | null, y: number | null) => typedError<TokenSummary, AppError>(__TAURI_INVOKE("move_token", { tokenId, x, y })),
 	deleteToken: (tokenId: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_token", { tokenId })),
+	assignTokenCharacter: (tokenId: string, characterId: string | null) => typedError<TokenSummary, AppError>(__TAURI_INVOKE("assign_token_character", { tokenId, characterId })),
 	createCharacter: (name: string, characterType: string) => typedError<CharacterSummary, AppError>(__TAURI_INVOKE("create_character", { name, characterType })),
 	listCharacters: () => typedError<CharacterSummary[], AppError>(__TAURI_INVOKE("list_characters")),
 	createJournalEntry: (title: string, folderPath: string) => typedError<JournalEntrySummary, AppError>(__TAURI_INVOKE("create_journal_entry", { title, folderPath })),

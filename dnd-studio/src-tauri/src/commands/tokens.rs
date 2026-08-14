@@ -51,3 +51,16 @@ pub async fn delete_token(
 
     db.delete_token(&token_id).await
 }
+
+#[tauri::command]
+#[specta::specta]
+pub async fn assign_token_character(
+    state: State<'_, AppState>,
+    token_id: String,
+    character_id: Option<String>,
+) -> Result<TokenSummary, AppError> {
+    let db = require_db(&state.campaign).await?;
+
+    db.assign_token_character(&token_id, character_id)
+        .await
+}

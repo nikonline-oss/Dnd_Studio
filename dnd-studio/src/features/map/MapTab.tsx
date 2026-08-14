@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 
 import {
@@ -11,6 +11,7 @@ import {
   useTokens,
 } from '../../shared/api/hooks';
 import { useMapSettingsStore } from '../../shared/stores/mapSettings';
+import { useTableStore } from '../../shared/stores/table';
 
 import { MapCanvas } from './MapCanvas';
 
@@ -23,15 +24,42 @@ export function MapTab({ mapId }: { mapId?: string }) {
   const moveToken = useMoveToken();
   const deleteToken = useDeleteToken();
   const importMapImage = useImportMapImage();
+  
   const showGridByMap = useMapSettingsStore((state) => state.showGridByMap);
   const toggleGrid = useMapSettingsStore((state) => state.toggleGrid);
-
-  const showGrid = map ? (showGridByMap[map.id ?? ''] ?? true) : true;
+  
+  const setSelectedMapId = useTableStore((state) => state.setSelectedMapId);
+  const setSelectedTokenIdGlobal = useTableStore(
+    (state) => state.setSelectedTokenId,
+  );
 
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [pendingDeleteTokenIds, setPendingDeleteTokenIds] = useState<string[]>([]);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string>('');
 
+  // 1. Хуки useEffect ДОЛЖНЫ быть здесь, до любых if/return
+  useEffect(() => {
+    if (map) {
+      setSelectedMapId(map.id);
+    } else {
+      setSelectedMapId(null);
+    }
+
+    return () => {
+      // Очистка глобального стора при размонтировании вкладки
+      setSelectedMapId(null);
+      setSelectedTokenIdGlobal(null);
+    };
+  }, [map?.id, setSelectedMapId, setSelectedTokenIdGlobal]);
+
+  useEffect(() => {
+    setSelectedTokenIdGlobal(selectedTokenId);
+  }, [selectedTokenId, setSelectedTokenIdGlobal]);
+
+  // 2. Вычисляемые значения
+  const showGrid = map ? (showGridByMap[map.id] ?? true) : true;
+
+  // 3. Early returns (досрочные выходы)
   if (!mapId) {
     return (
       <div className="workspace-empty">
@@ -56,6 +84,7 @@ export function MapTab({ mapId }: { mapId?: string }) {
     );
   }
 
+  // 4. Хендлеры и рендер (здесь TS уже знает, что map точно не null)
   const visibleTokens = tokens.filter(
     (token) => !pendingDeleteTokenIds.includes(token.id),
   );
@@ -160,6 +189,7 @@ export function MapTab({ mapId }: { mapId?: string }) {
           >
             {importMapImage.isPending ? 'Loading…' : 'Load image'}
           </button>
+          
           <label className="map-grid-toggle">
             <input
               type="checkbox"
@@ -168,6 +198,7 @@ export function MapTab({ mapId }: { mapId?: string }) {
             />
             Grid
           </label>
+          
           <select
             value={selectedCharacterId}
             onChange={(event) => setSelectedCharacterId(event.target.value)}

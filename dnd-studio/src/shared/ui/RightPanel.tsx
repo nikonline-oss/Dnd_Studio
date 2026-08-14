@@ -1,10 +1,107 @@
 import {
   useActiveCampaign,
+  useAssignTokenCharacter,
+  useCharacters,
   useCreateJournalEntry,
   useJournalEntries,
+  useTokens,
 } from '../api/hooks';
+import { useTableStore } from '../stores/table';
 import { useUiStore } from '../stores/ui';
 import { useWorkspaceStore } from '../stores/workspace';
+
+function InspectorPanel() {
+  const selectedMapId = useTableStore((state) => state.selectedMapId);
+  const selectedTokenId = useTableStore((state) => state.selectedTokenId);
+
+  const { data: tokens = [], isLoading: areTokensLoading } = useTokens(
+    selectedMapId ?? undefined,
+  );
+
+  const token = tokens.find((item) => item.id === selectedTokenId);
+
+  const { data: characters = [] } = useCharacters(Boolean(selectedMapId));
+
+  const assignTokenCharacter = useAssignTokenCharacter();
+
+  const openCharacterTab = useWorkspaceStore(
+    (state) => state.openCharacterTab,
+  );
+
+  if (!selectedMapId || !selectedTokenId) {
+    return (
+      <div className="empty-state">
+        Select a token on the map.
+      </div>
+    );
+  }
+
+  if (areTokensLoading) {
+    return <div className="empty-state">Loading token…</div>;
+  }
+
+  if (!token) {
+    return <div className="empty-state">Token not found.</div>;
+  }
+
+  const assignedCharacter = characters.find(
+    (character) => character.id === token.characterId,
+  );
+
+  return (
+    <div className="inspector">
+      <div className="inspector-section">Token</div>
+
+      <div className="inspector-row">
+        <span>ID</span>
+        <code>{token.id.slice(0, 8)}</code>
+      </div>
+
+      <div className="inspector-row">
+        <span>Position</span>
+        <span>
+          {Math.round(token.x ?? 0)}, {Math.round(token.y ?? 0)}
+        </span>
+      </div>
+
+      <div className="inspector-row">
+        <span>Visible</span>
+        <span>{token.isVisible ? 'Yes' : 'No'}</span>
+      </div>
+
+      <div className="inspector-section">Character</div>
+
+      <select
+        value={token.characterId ?? ''}
+        disabled={assignTokenCharacter.isPending}
+        onChange={(event) => {
+          assignTokenCharacter.mutate({
+            mapId: selectedMapId,
+            tokenId: token.id,
+            characterId: event.target.value || null,
+          });
+        }}
+      >
+        <option value="">No character</option>
+
+        {characters.map((character) => (
+          <option key={character.id} value={character.id}>
+            {character.name} ({character.type.toUpperCase()})
+          </option>
+        ))}
+      </select>
+
+      {assignedCharacter && (
+        <button
+          type="button"
+          onClick={() => openCharacterTab(assignedCharacter)}
+        >
+          Open character
+        </button>
+      )}
+    </div>
+  );
+}
 
 function JournalToc() {
   const { data: activeCampaign } = useActiveCampaign();
@@ -82,9 +179,7 @@ export function RightPanel() {
   return (
     <aside className="panel right-panel" aria-label="Right panel content">
       <div className="panel-content">
-        {activeRightTab === 'inspector' && (
-          <div className="empty-state">Inspector will appear here.</div>
-        )}
+        {activeRightTab === 'inspector' && <InspectorPanel />}
 
         {activeRightTab === 'journalToc' && <JournalToc />}
       </div>

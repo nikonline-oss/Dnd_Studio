@@ -12,6 +12,7 @@ use commands::tokens::{
     delete_token,
     list_tokens,
     move_token,
+    assign_token_character,
 };
 use commands::characters::{create_character, list_characters, get_character, update_character};
 use commands::journal::{
@@ -42,6 +43,7 @@ fn main() {
         list_tokens,
         move_token,
         delete_token,
+        assign_token_character,
         create_character,
         list_characters,
         create_journal_entry,

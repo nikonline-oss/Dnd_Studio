@@ -482,3 +482,32 @@ export function useImportMapImage() {
     },
   });
 }
+
+export function useAssignTokenCharacter() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      tokenId,
+      characterId,
+    }: {
+      mapId: string;
+      tokenId: string;
+      characterId: string | null;
+    }) => unwrap(commands.assignTokenCharacter(tokenId, characterId)),
+
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['tokens', variables.mapId],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ['characters'],
+      });
+    },
+
+    onError: (error) => {
+      logError('api', 'assign token character failed', error);
+    },
+  });
+}

@@ -771,6 +771,44 @@ impl CampaignDb {
 
         self.get_map(map_id).await?.ok_or(AppError::NotFound)
     }
+
+    pub async fn assign_token_character(
+        &self,
+        token_id: &str,
+        character_id: Option<String>,
+    ) -> Result<TokenSummary, AppError> {
+        if let Some(character_id) = &character_id {
+            let character_exists =
+                sqlx::query_scalar::<_, String>("SELECT id FROM characters WHERE id = ?")
+                    .bind(character_id)
+                    .fetch_optional(&self.pool)
+                    .await
+                    .map_err(AppError::db)?;
+
+            if character_exists.is_none() {
+                return Err(AppError::NotFound);
+            }
+        }
+
+        let result = sqlx::query(
+            r#"
+        UPDATE tokens
+        SET character_id = ?
+        WHERE id = ?
+        "#,
+        )
+        .bind(&character_id)
+        .bind(token_id)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        self.fetch_token(token_id).await
+    }
 }
 
 async fn connect(path: &Path, create_if_missing: bool) -> Result<SqlitePool, AppError> {
