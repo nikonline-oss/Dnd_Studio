@@ -1,4 +1,6 @@
 import clsx from 'clsx';
+
+import { ChatPanel } from '../../features/chat/ChatPanel';
 import { InitiativePanel } from '../../features/initiative/InitiativePanel';
 import { useUiStore, type BottomTab } from '../stores/ui';
 
@@ -6,6 +8,10 @@ const tabs: Array<{
   id: BottomTab;
   label: string;
 }> = [
+  {
+    id: 'initiative',
+    label: 'Initiative',
+  },
   {
     id: 'chat',
     label: 'Chat',
@@ -18,15 +24,13 @@ const tabs: Array<{
     id: 'dslTerminal',
     label: 'DSL Terminal',
   },
-  {
-    id: 'initiative',
-    label: 'Initiative',
-  },
 ];
 
 export function BottomPanel() {
   const activeBottomTab = useUiStore((state) => state.activeBottomTab);
-  const setActiveBottomTab = useUiStore((state) => state.setActiveBottomTab);
+  const setActiveBottomTab = useUiStore(
+    (state) => state.setActiveBottomTab,
+  );
 
   return (
     <section className="panel bottom-panel">
@@ -46,20 +50,18 @@ export function BottomPanel() {
       </div>
 
       <div className="panel-content">
-        {activeBottomTab === 'chat' && (
-          <div className="empty-state">Chat will appear here.</div>
-        )}
+        {activeBottomTab === 'initiative' && <InitiativePanel />}
+
+        {activeBottomTab === 'chat' && <ChatPanel />}
 
         {activeBottomTab === 'logs' && (
           <div className="empty-state">Logs will appear here.</div>
         )}
 
         {activeBottomTab === 'dslTerminal' && (
-          <div className="empty-state">DSL terminal is planned for Phase 2+.</div>
-        )}
-
-        {activeBottomTab === 'initiative' && (
-          <InitiativePanel />
+          <div className="empty-state">
+            DSL terminal is planned for Phase 2+.
+          </div>
         )}
       </div>
     </section>
