@@ -78,7 +78,6 @@ export function useCloseCampaign() {
   });
 }
 
-
 export function useMaps(enabled: boolean) {
   return useQuery({
     queryKey: ['maps'],
@@ -117,6 +116,7 @@ export function useTokens(mapId?: string) {
     retry: false,
   });
 }
+
 type CreateTokenVars = {
   mapId: string;
   x: number;
@@ -139,6 +139,7 @@ type DeleteTokenVars = {
 type TokenMutationContext = {
   previous?: TokenSummary[];
 };
+
 export function useCreateToken() {
   const queryClient = useQueryClient();
 
@@ -164,6 +165,7 @@ export function useCreateToken() {
     },
   });
 }
+
 export function useMoveToken() {
   const queryClient = useQueryClient();
 
@@ -192,10 +194,10 @@ export function useMoveToken() {
           old.map((token) =>
             token.id === variables.tokenId
               ? {
-                  ...token,
-                  x: variables.x,
-                  y: variables.y,
-                }
+                ...token,
+                x: variables.x,
+                y: variables.y,
+              }
               : token,
           ),
       );
@@ -299,6 +301,107 @@ export function useCreateCharacter() {
 
     onError: (error) => {
       logError('api', 'create character failed', error);
+    },
+  });
+}
+
+
+export function useJournalEntries(enabled: boolean = true) {
+  return useQuery({
+    queryKey: ['journalEntries'],
+    queryFn: () => unwrap(commands.listJournalEntries()),
+    enabled,
+    retry: false,
+  });
+}
+
+export function useJournalEntry(id?: string) {
+  return useQuery({
+    queryKey: ['journalEntry', id],
+    queryFn: () => unwrap(commands.getJournalEntry(id!)),
+    enabled: Boolean(id),
+    retry: false,
+  });
+}
+
+export function useCreateJournalEntry() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      title,
+      folderPath,
+    }: {
+      title: string;
+      folderPath: string;
+    }) => unwrap(commands.createJournalEntry(title, folderPath)),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
+    },
+
+    onError: (error) => {
+      logError('api', 'create journal entry failed', error);
+    },
+  });
+}
+
+export function useUpdateJournalEntry() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      title,
+      contentMarkdown,
+      folderPath,
+      isVisibleToPlayers,
+    }: {
+      id: string;
+      title: string;
+      contentMarkdown: string;
+      folderPath: string;
+      isVisibleToPlayers: boolean;
+    }) =>
+      unwrap(
+        commands.updateJournalEntry(
+          id,
+          title,
+          contentMarkdown,
+          folderPath,
+          isVisibleToPlayers,
+        ),
+      ),
+
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
+      queryClient.invalidateQueries({
+        queryKey: ['journalEntry', variables.id],
+      });
+    },
+
+    onError: (error) => {
+      logError('api', 'update journal entry failed', error);
+    },
+  });
+}
+
+export function useDeleteJournalEntry() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id }: { id: string }) =>
+      unwrap(commands.deleteJournalEntry(id)),
+
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
+      queryClient.removeQueries({
+        queryKey: ['journalEntry', variables.id],
+      });
+    },
+
+    onError: (error) => {
+      logError('api', 'delete journal entry failed', error);
     },
   });
 }

@@ -34,6 +34,13 @@ interface WorkspaceState {
   setActiveTab: (tabId: string) => void;
 
   openMapTab: (map: { id: string; name: string }) => void;
+
+  openJournalTab: (entry: { id: string; title: string }) => void;
+  renameTabByEntity: (
+    kind: WorkspaceTabKind,
+    entityId: string,
+    title: string,
+  ) => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>()(
@@ -197,6 +204,31 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           entityId: map.id,
         });
       },
+
+      openJournalTab: (entry) => {
+        logDebug('workspace', 'openJournalTab', entry);
+
+        get().openTab({
+          id: `journal:${entry.id}`,
+          kind: 'journal',
+          title: entry.title || 'Journal',
+          entityId: entry.id,
+        });
+      },
+
+      renameTabByEntity: (kind, entityId, title) =>
+        set((state) => ({
+          tabs: state.tabs.map((tab) => {
+            if (tab.kind === kind && tab.entityId === entityId) {
+              return {
+                ...tab,
+                title,
+              };
+            }
+
+            return tab;
+          }),
+        })),
     }),
     {
       name: 'dndstudio.workspace',

@@ -1,4 +1,7 @@
-use dnd_core::{AppError, CampaignSummary, CharacterSummary, MapSummary, TokenSummary};
+use dnd_core::{
+    AppError, CampaignSummary, CharacterSummary, JournalEntryDetail, JournalEntrySummary,
+    MapSummary, TokenSummary,
+};
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::SqlitePool;
@@ -464,6 +467,174 @@ impl CampaignDb {
             })
             .collect())
     }
+
+    pub async fn create_journal_entry(
+        &self,
+        title: &str,
+        folder_path: &str,
+    ) -> Result<JournalEntrySummary, AppError> {
+        let title = title.trim().to_string();
+
+        if title.is_empty() {
+            return Err(AppError::Validation(
+                "Journal entry title is required".to_string(),
+            ));
+        }
+
+        let folder_path = normalize_folder_path(folder_path);
+        let id = uuid::Uuid::new_v4().to_string();
+
+        sqlx::query(
+            r#"
+        INSERT INTO journal_entries (
+            id,
+            title,
+            content_markdown,
+            folder_path,
+            is_visible_to_players
+        )
+        VALUES (?, ?, ?, ?, ?)
+        "#,
+        )
+        .bind(&id)
+        .bind(&title)
+        .bind("")
+        .bind(&folder_path)
+        .bind(0)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(JournalEntrySummary {
+            id,
+            title,
+            folder_path,
+            is_visible_to_players: false,
+        })
+    }
+
+    pub async fn list_journal_entries(&self) -> Result<Vec<JournalEntrySummary>, AppError> {
+        let rows = sqlx::query_as::<_, (String, String, String, i32)>(
+            r#"
+        SELECT
+            id,
+            title,
+            folder_path,
+            is_visible_to_players
+        FROM journal_entries
+        ORDER BY folder_path, title
+        "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(id, title, folder_path, is_visible_to_players)| JournalEntrySummary {
+                    id,
+                    title,
+                    folder_path,
+                    is_visible_to_players: is_visible_to_players != 0,
+                },
+            )
+            .collect())
+    }
+
+    pub async fn get_journal_entry(
+        &self,
+        id: &str,
+    ) -> Result<Option<JournalEntryDetail>, AppError> {
+        let row = sqlx::query_as::<_, (String, String, String, String, i32)>(
+            r#"
+        SELECT
+            id,
+            title,
+            content_markdown,
+            folder_path,
+            is_visible_to_players
+        FROM journal_entries
+        WHERE id = ?
+        "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(row.map(
+            |(id, title, content_markdown, folder_path, is_visible_to_players)| {
+                JournalEntryDetail {
+                    id,
+                    title,
+                    content_markdown,
+                    folder_path,
+                    is_visible_to_players: is_visible_to_players != 0,
+                }
+            },
+        ))
+    }
+
+    pub async fn update_journal_entry(
+        &self,
+        id: &str,
+        title: &str,
+        content_markdown: &str,
+        folder_path: &str,
+        is_visible_to_players: bool,
+    ) -> Result<JournalEntryDetail, AppError> {
+        let title = title.trim().to_string();
+
+        if title.is_empty() {
+            return Err(AppError::Validation(
+                "Journal entry title is required".to_string(),
+            ));
+        }
+
+        let folder_path = normalize_folder_path(folder_path);
+        let visible = if is_visible_to_players { 1 } else { 0 };
+
+        let result = sqlx::query(
+            r#"
+        UPDATE journal_entries
+        SET
+            title = ?,
+            content_markdown = ?,
+            folder_path = ?,
+            is_visible_to_players = ?
+        WHERE id = ?
+        "#,
+        )
+        .bind(&title)
+        .bind(content_markdown)
+        .bind(&folder_path)
+        .bind(visible)
+        .bind(id)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        self.get_journal_entry(id).await?.ok_or(AppError::NotFound)
+    }
+
+    pub async fn delete_journal_entry(&self, id: &str) -> Result<(), AppError> {
+        let result = sqlx::query("DELETE FROM journal_entries WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        Ok(())
+    }
 }
 
 async fn connect(path: &Path, create_if_missing: bool) -> Result<SqlitePool, AppError> {
@@ -514,6 +685,26 @@ fn row_to_token(
         is_visible: is_visible != 0,
         character_name,
     }
+}
+
+fn normalize_folder_path(path: &str) -> String {
+    let trimmed = path.trim();
+
+    if trimmed.is_empty() || trimmed == "/" {
+        return "/".to_string();
+    }
+
+    let mut result = trimmed.replace('\\', "/");
+
+    if !result.starts_with('/') {
+        result.insert(0, '/');
+    }
+
+    while result.len() > 1 && result.ends_with('/') {
+        result.pop();
+    }
+
+    result
 }
 
 pub fn now_unix() -> i32 {

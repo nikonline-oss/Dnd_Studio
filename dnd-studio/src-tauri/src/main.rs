@@ -14,6 +14,13 @@ use commands::tokens::{
     move_token,
 };
 use commands::characters::{create_character, list_characters};
+use commands::journal::{
+    create_journal_entry,
+    delete_journal_entry,
+    get_journal_entry,
+    list_journal_entries,
+    update_journal_entry,
+};
 use state::{AppPaths, AppState};
 use tauri::Manager;
 use specta_typescript::Typescript;
@@ -36,7 +43,12 @@ fn main() {
         move_token,
         delete_token,
         create_character,
-        list_characters
+        list_characters,
+        create_journal_entry,
+        list_journal_entries,
+        get_journal_entry,
+        update_journal_entry,
+        delete_journal_entry
     ]);
 
     #[cfg(debug_assertions)]

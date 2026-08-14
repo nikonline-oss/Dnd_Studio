@@ -55,6 +55,25 @@ pub struct CharacterSummary {
     pub character_type: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct JournalEntrySummary {
+    pub id: String,
+    pub title: String,
+    pub folder_path: String,
+    pub is_visible_to_players: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct JournalEntryDetail {
+    pub id: String,
+    pub title: String,
+    pub content_markdown: String,
+    pub folder_path: String,
+    pub is_visible_to_players: bool,
+}
+
 #[derive(Debug, thiserror::Error, Serialize, specta::Type)]
 #[serde(tag = "kind", content = "message")]
 pub enum AppError {

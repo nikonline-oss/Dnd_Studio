@@ -31,6 +31,17 @@ export const commands = {
 	deleteToken: (tokenId: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_token", { tokenId })),
 	createCharacter: (name: string, characterType: string) => typedError<CharacterSummary, AppError>(__TAURI_INVOKE("create_character", { name, characterType })),
 	listCharacters: () => typedError<CharacterSummary[], AppError>(__TAURI_INVOKE("list_characters")),
+	createJournalEntry: (title: string, folderPath: string) => typedError<JournalEntrySummary, AppError>(__TAURI_INVOKE("create_journal_entry", { title, folderPath })),
+	listJournalEntries: () => typedError<JournalEntrySummary[], AppError>(__TAURI_INVOKE("list_journal_entries")),
+	getJournalEntry: (id: string) => typedError<{
+	id: string,
+	title: string,
+	contentMarkdown: string,
+	folderPath: string,
+	isVisibleToPlayers: boolean,
+} | null, AppError>(__TAURI_INVOKE("get_journal_entry", { id })),
+	updateJournalEntry: (id: string, title: string, contentMarkdown: string, folderPath: string, isVisibleToPlayers: boolean) => typedError<JournalEntryDetail, AppError>(__TAURI_INVOKE("update_journal_entry", { id, title, contentMarkdown, folderPath, isVisibleToPlayers })),
+	deleteJournalEntry: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_journal_entry", { id })),
 };
 
 /* Types */
@@ -55,6 +66,21 @@ export type CharacterSummary = {
 	id: string,
 	name: string,
 	type: string,
+};
+
+export type JournalEntryDetail = {
+	id: string,
+	title: string,
+	contentMarkdown: string,
+	folderPath: string,
+	isVisibleToPlayers: boolean,
+};
+
+export type JournalEntrySummary = {
+	id: string,
+	title: string,
+	folderPath: string,
+	isVisibleToPlayers: boolean,
 };
 
 export type MapSummary = {
