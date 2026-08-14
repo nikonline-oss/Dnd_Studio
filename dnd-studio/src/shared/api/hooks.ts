@@ -728,3 +728,51 @@ export function useImportCampaign() {
     },
   });
 }
+
+export function useInstalledPlugins(enabled: boolean = true) {
+  return useQuery({
+    queryKey: ['plugins'],
+    queryFn: () => unwrap(commands.listInstalledPlugins()),
+    enabled,
+    retry: false,
+  });
+}
+
+export function useInstallPlugin() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (sourcePath: string) =>
+      unwrap(commands.installPluginFromFile(sourcePath)),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plugins'] });
+    },
+
+    onError: (error) => {
+      logError('api', 'install plugin failed', error);
+    },
+  });
+}
+
+export function useSetPluginActive() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      pluginId,
+      isActive,
+    }: {
+      pluginId: string;
+      isActive: boolean;
+    }) => unwrap(commands.setPluginActive(pluginId, isActive)),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plugins'] });
+    },
+
+    onError: (error) => {
+      logError('api', 'set plugin active failed', error);
+    },
+  });
+}

@@ -1,6 +1,7 @@
 use dnd_core::{
     AppError, CampaignSummary, CharacterDetail, CharacterSummary, CompendiumEntrySummary,
-    CompendiumSummary, JournalEntryDetail, JournalEntrySummary, MapSummary, TokenSummary,
+    CompendiumSummary, InstalledPluginSummary, JournalEntryDetail, JournalEntrySummary, MapSummary,
+    PluginDependency, PluginManifest, TokenSummary,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
@@ -1086,6 +1087,129 @@ impl CampaignDb {
         }
 
         Ok(())
+    }
+
+    pub async fn upsert_installed_plugin(
+        &self,
+        plugin_id: &str,
+        version: &str,
+        is_active: bool,
+        manifest_json: &str,
+    ) -> Result<(), AppError> {
+        let active = if is_active { 1 } else { 0 };
+
+        sqlx::query(
+            r#"
+        INSERT INTO installed_plugins (
+            plugin_id,
+            version,
+            is_active,
+            config_json
+        )
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(plugin_id) DO UPDATE SET
+            version = excluded.version,
+            is_active = excluded.is_active,
+            config_json = excluded.config_json
+        "#,
+        )
+        .bind(plugin_id)
+        .bind(version)
+        .bind(active)
+        .bind(manifest_json)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(())
+    }
+
+    pub async fn list_installed_plugins(&self) -> Result<Vec<InstalledPluginSummary>, AppError> {
+        let rows = sqlx::query_as::<_, (String, String, i32, String)>(
+            r#"
+        SELECT
+            plugin_id,
+            version,
+            is_active,
+            config_json
+        FROM installed_plugins
+        ORDER BY plugin_id
+        "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(plugin_id, version, is_active, manifest_json)| InstalledPluginSummary {
+                    plugin_id,
+                    version,
+                    is_active: is_active != 0,
+                    manifest_json,
+                },
+            )
+            .collect())
+    }
+
+    pub async fn get_installed_plugin(
+        &self,
+        plugin_id: &str,
+    ) -> Result<Option<InstalledPluginSummary>, AppError> {
+        let row = sqlx::query_as::<_, (String, String, i32, String)>(
+            r#"
+        SELECT
+            plugin_id,
+            version,
+            is_active,
+            config_json
+        FROM installed_plugins
+        WHERE plugin_id = ?
+        "#,
+        )
+        .bind(plugin_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(row.map(
+            |(plugin_id, version, is_active, manifest_json)| InstalledPluginSummary {
+                plugin_id,
+                version,
+                is_active: is_active != 0,
+                manifest_json,
+            },
+        ))
+    }
+
+    pub async fn set_plugin_active(
+        &self,
+        plugin_id: &str,
+        is_active: bool,
+    ) -> Result<InstalledPluginSummary, AppError> {
+        let active = if is_active { 1 } else { 0 };
+
+        let result = sqlx::query(
+            r#"
+        UPDATE installed_plugins
+        SET is_active = ?
+        WHERE plugin_id = ?
+        "#,
+        )
+        .bind(active)
+        .bind(plugin_id)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        self.get_installed_plugin(plugin_id)
+            .await?
+            .ok_or(AppError::NotFound)
     }
 }
 

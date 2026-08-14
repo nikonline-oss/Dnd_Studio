@@ -361,4 +361,5 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
-dnd-studio/target/.rustc_info.json
+dnd-studio/target/
+test-plugin/

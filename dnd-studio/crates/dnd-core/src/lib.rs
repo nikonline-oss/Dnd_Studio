@@ -106,6 +106,52 @@ pub struct CompendiumEntrySummary {
     pub data_json: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct InstalledPluginSummary {
+    pub plugin_id: String,
+    pub version: String,
+    pub is_active: bool,
+    pub manifest_json: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginDependency {
+    pub id: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginManifest {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+
+    #[serde(default)]
+    pub author: Option<String>,
+
+    #[serde(default)]
+    pub dnd_studio_compat: Option<String>,
+
+    #[serde(default)]
+    pub description: Option<String>,
+
+    #[serde(default)]
+    pub dependencies: Vec<PluginDependency>,
+
+    #[serde(default)]
+    pub sheets: Vec<serde_json::Value>,
+
+    #[serde(default)]
+    pub compendiums: Vec<serde_json::Value>,
+
+    #[serde(default)]
+    pub themes: Vec<serde_json::Value>,
+
+    #[serde(default)]
+    pub link_types: Vec<serde_json::Value>,
+}
+
 #[derive(Debug, thiserror::Error, Serialize, specta::Type)]
 #[serde(tag = "kind", content = "message")]
 pub enum AppError {

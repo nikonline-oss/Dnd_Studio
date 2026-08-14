@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-
+import { open } from '@tauri-apps/plugin-dialog';
 import {
   useActiveCampaign,
   useCharacters,
@@ -8,11 +8,131 @@ import {
   useCreateCompendium,
   useCreateMap,
   useDeleteCompendium,
+  useInstalledPlugins,
+  useInstallPlugin,
   useMaps,
+  useSetPluginActive,
   useUpdateCompendium,
 } from '../api/hooks';
 import { useUiStore } from '../stores/ui';
 import { useWorkspaceStore } from '../stores/workspace';
+
+
+
+function parsePluginManifest(rawJson: string): {
+  name?: string;
+  description?: string;
+  author?: string;
+} | null {
+  try {
+    return JSON.parse(rawJson);
+  } catch {
+    return null;
+  }
+}
+
+function PluginsPanel() {
+  const { data: activeCampaign } = useActiveCampaign();
+
+  const { data: plugins = [], isLoading } = useInstalledPlugins(
+    Boolean(activeCampaign),
+  );
+
+  const installPlugin = useInstallPlugin();
+  const setPluginActive = useSetPluginActive();
+
+  if (!activeCampaign) {
+    return (
+      <div className="empty-state">
+        Open a campaign to manage plugins.
+      </div>
+    );
+  }
+
+  const handleInstallPlugin = async () => {
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [
+          {
+            name: 'DndStudio Plugin',
+            extensions: ['dndplugin'],
+          },
+        ],
+      });
+
+      if (typeof selected === 'string') {
+        installPlugin.mutate(selected);
+      }
+    } catch (error) {
+      console.error('Failed to install plugin', error);
+    }
+  };
+
+  return (
+    <div className="navigator">
+      <div className="navigator-section">
+        <div className="navigator-section-title">Plugins</div>
+
+        <button
+          type="button"
+          onClick={handleInstallPlugin}
+          disabled={installPlugin.isPending}
+        >
+          {installPlugin.isPending ? 'Installing…' : 'Install .dndplugin'}
+        </button>
+
+        {isLoading && <div className="empty-state">Loading plugins…</div>}
+
+        {!isLoading && plugins.length === 0 && (
+          <div className="empty-state">No plugins installed.</div>
+        )}
+
+        <div className="plugin-list">
+          {plugins.map((plugin) => {
+            const manifest = parsePluginManifest(plugin.manifestJson);
+
+            return (
+              <div key={plugin.pluginId} className="plugin-item">
+                <label className="plugin-active-label">
+                  <input
+                    type="checkbox"
+                    checked={plugin.isActive}
+                    disabled={setPluginActive.isPending}
+                    onChange={(event) =>
+                      setPluginActive.mutate({
+                        pluginId: plugin.pluginId,
+                        isActive: event.target.checked,
+                      })
+                    }
+                  />
+
+                  <div className="plugin-info">
+                    <div className="plugin-name">
+                      {manifest?.name ?? plugin.pluginId}
+                    </div>
+
+                    <div className="plugin-meta">
+                      v{plugin.version}
+                      {manifest?.author ? ` · ${manifest.author}` : ''}
+                    </div>
+
+                    {manifest?.description && (
+                      <div className="plugin-description">
+                        {manifest.description}
+                      </div>
+                    )}
+                  </div>
+                </label>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 /* ========================================= */
 /* Панель Компендиев                         */
@@ -416,9 +536,7 @@ export function LeftPanel() {
       <div className="panel-content">
         {activeLeftTab === 'navigator' && <NavigatorPanel />}
 
-        {activeLeftTab === 'plugins' && (
-          <div className="empty-state">Plugin browser will appear here.</div>
-        )}
+        {activeLeftTab === 'plugins' && <PluginsPanel />}
 
         {activeLeftTab === 'compendiums' && <CompendiumsPanel />}
       </div>

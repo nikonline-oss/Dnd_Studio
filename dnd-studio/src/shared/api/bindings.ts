@@ -66,6 +66,9 @@ export const commands = {
 	exportCampaign: (destinationPath: string) => typedError<null, AppError>(__TAURI_INVOKE("export_campaign", { destinationPath })),
 	/**  Импорт кампании из файла .dndcampaign (ZIP) */
 	importCampaign: (sourcePath: string) => typedError<CampaignSummary, AppError>(__TAURI_INVOKE("import_campaign", { sourcePath })),
+	installPluginFromFile: (sourcePath: string) => typedError<InstalledPluginSummary, AppError>(__TAURI_INVOKE("install_plugin_from_file", { sourcePath })),
+	listInstalledPlugins: () => typedError<InstalledPluginSummary[], AppError>(__TAURI_INVOKE("list_installed_plugins")),
+	setPluginActive: (pluginId: string, isActive: boolean) => typedError<InstalledPluginSummary, AppError>(__TAURI_INVOKE("set_plugin_active", { pluginId, isActive })),
 };
 
 /* Types */
@@ -112,6 +115,13 @@ export type CompendiumSummary = {
 	name: string,
 	sourcePluginId: string | null,
 	type: string,
+};
+
+export type InstalledPluginSummary = {
+	pluginId: string,
+	version: string,
+	isActive: boolean,
+	manifestJson: string,
 };
 
 export type JournalEntryDetail = {
