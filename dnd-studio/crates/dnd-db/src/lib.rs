@@ -1,6 +1,6 @@
 use dnd_core::{
-    AppError, CampaignSummary, CharacterDetail, CharacterSummary, JournalEntryDetail,
-    JournalEntrySummary, MapSummary, TokenSummary,
+    AppError, CampaignSummary, CharacterDetail, CharacterSummary, CompendiumEntrySummary,
+    CompendiumSummary, JournalEntryDetail, JournalEntrySummary, MapSummary, TokenSummary,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
@@ -836,6 +836,135 @@ impl CampaignDb {
         }
 
         Ok(())
+    }
+
+    pub async fn list_compendiums(&self) -> Result<Vec<CompendiumSummary>, AppError> {
+        let rows = sqlx::query_as::<_, (String, String, Option<String>, String)>(
+            r#"
+        SELECT id, name, source_plugin_id, type
+        FROM compendiums
+        ORDER BY name
+        "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(id, name, source_plugin_id, r#type)| CompendiumSummary {
+                id,
+                name,
+                source_plugin_id,
+                r#type,
+            })
+            .collect())
+    }
+
+    pub async fn list_compendium_entries(
+        &self,
+        compendium_id: &str,
+    ) -> Result<Vec<CompendiumEntrySummary>, AppError> {
+        let rows = sqlx::query_as::<_, (String, String, String, String, String)>(
+            r#"
+        SELECT id, compendium_id, entry_key, name, data_json
+        FROM compendium_entries
+        WHERE compendium_id = ?
+        ORDER BY name
+        "#,
+        )
+        .bind(compendium_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(id, compendium_id, entry_key, name, data_json)| CompendiumEntrySummary {
+                    id,
+                    compendium_id,
+                    entry_key,
+                    name,
+                    data_json,
+                },
+            )
+            .collect())
+    }
+
+    pub async fn create_compendium(
+        &self,
+        name: &str,
+        compendium_type: &str,
+    ) -> Result<CompendiumSummary, AppError> {
+        let name = name.trim().to_string();
+
+        if name.is_empty() {
+            return Err(AppError::Validation(
+                "Compendium name is required".to_string(),
+            ));
+        }
+
+        let id = uuid::Uuid::new_v4().to_string();
+
+        sqlx::query(
+            r#"
+        INSERT INTO compendiums (id, name, source_plugin_id, type)
+        VALUES (?, ?, NULL, ?)
+        "#,
+        )
+        .bind(&id)
+        .bind(&name)
+        .bind(compendium_type)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(CompendiumSummary {
+            id,
+            name,
+            source_plugin_id: None,
+            r#type: compendium_type.to_string(),
+        })
+    }
+
+    pub async fn create_compendium_entry(
+        &self,
+        compendium_id: &str,
+        entry_key: &str,
+        name: &str,
+        data_json: &str,
+    ) -> Result<CompendiumEntrySummary, AppError> {
+        let name = name.trim().to_string();
+
+        if name.is_empty() {
+            return Err(AppError::Validation("Entry name is required".to_string()));
+        }
+
+        let id = uuid::Uuid::new_v4().to_string();
+
+        sqlx::query(
+            r#"
+        INSERT INTO compendium_entries (id, compendium_id, entry_key, name, data_json)
+        VALUES (?, ?, ?, ?, ?)
+        "#,
+        )
+        .bind(&id)
+        .bind(compendium_id)
+        .bind(entry_key)
+        .bind(&name)
+        .bind(data_json)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(CompendiumEntrySummary {
+            id,
+            compendium_id: compendium_id.to_string(),
+            entry_key: entry_key.to_string(),
+            name,
+            data_json: data_json.to_string(),
+        })
     }
 }
 

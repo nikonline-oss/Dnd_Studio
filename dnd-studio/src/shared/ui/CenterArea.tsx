@@ -7,6 +7,7 @@ import { CharacterTab } from '../../features/character/CharacterTab';
 import { MapTab } from '../../features/map/MapTab';
 import { logDebug } from '../lib/debug';
 import { useWorkspaceStore } from '../stores/workspace';
+import { CompendiumTab } from '../../features/compendium/CompendiumTab';
 
 import { WorkspaceTabBar } from './WorkspaceTabBar';
 
@@ -41,6 +42,10 @@ function ActiveTabContent() {
 
   if (activeTab.kind === 'character') {
     return <CharacterTab characterId={activeTab.entityId} />;
+  }
+
+  if (activeTab.kind === 'compendium') {
+    return <CompendiumTab compendiumId={activeTab.entityId} />;
   }
 
   return (

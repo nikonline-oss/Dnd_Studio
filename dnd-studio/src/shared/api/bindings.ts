@@ -54,6 +54,10 @@ export const commands = {
 	importMapImage: (mapId: string, sourcePath: string) => typedError<MapSummary, AppError>(__TAURI_INVOKE("import_map_image", { mapId, sourcePath })),
 	readCampaignAssetDataUrl: (relativePath: string) => typedError<string, AppError>(__TAURI_INVOKE("read_campaign_asset_data_url", { relativePath })),
 	updateMapFog: (mapId: string, fogData: string | null) => typedError<null, AppError>(__TAURI_INVOKE("update_map_fog", { mapId, fogData })),
+	listCompendiums: () => typedError<CompendiumSummary[], AppError>(__TAURI_INVOKE("list_compendiums")),
+	listCompendiumEntries: (compendiumId: string) => typedError<CompendiumEntrySummary[], AppError>(__TAURI_INVOKE("list_compendium_entries", { compendiumId })),
+	createCompendium: (name: string, compendiumType: string) => typedError<CompendiumSummary, AppError>(__TAURI_INVOKE("create_compendium", { name, compendiumType })),
+	createCompendiumEntry: (compendiumId: string, entryKey: string, name: string, dataJson: string) => typedError<CompendiumEntrySummary, AppError>(__TAURI_INVOKE("create_compendium_entry", { compendiumId, entryKey, name, dataJson })),
 };
 
 /* Types */
@@ -84,6 +88,21 @@ export type CharacterDetail = {
 export type CharacterSummary = {
 	id: string,
 	name: string,
+	type: string,
+};
+
+export type CompendiumEntrySummary = {
+	id: string,
+	compendiumId: string,
+	entryKey: string,
+	name: string,
+	dataJson: string,
+};
+
+export type CompendiumSummary = {
+	id: string,
+	name: string,
+	sourcePluginId: string | null,
 	type: string,
 };
 

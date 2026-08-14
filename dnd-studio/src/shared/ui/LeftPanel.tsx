@@ -3,17 +3,131 @@ import { FormEvent, useState } from 'react';
 import {
   useActiveCampaign,
   useCharacters,
+  useCompendiums,
   useCreateCharacter,
+  useCreateCompendium,
   useCreateMap,
   useMaps,
 } from '../api/hooks';
 import { useUiStore } from '../stores/ui';
 import { useWorkspaceStore } from '../stores/workspace';
 
+/* ========================================= */
+/* Панель Компендиев                         */
+/* ========================================= */
+
+function CompendiumsPanel() {
+  const [newCompendiumName, setNewCompendiumName] = useState('');
+  const [newCompendiumType, setNewCompendiumType] = useState('monster');
+
+  const { data: activeCampaign } = useActiveCampaign();
+  const { data: compendiums = [], isLoading } = useCompendiums(
+    Boolean(activeCampaign),
+  );
+
+  const createCompendium = useCreateCompendium();
+  const openCompendiumTab = useWorkspaceStore(
+    (state) => state.openCompendiumTab,
+  );
+
+  if (!activeCampaign) {
+    return (
+      <div className="empty-state">
+        Open a campaign to see compendiums.
+      </div>
+    );
+  }
+
+  const onCreateCompendium = (event: FormEvent) => {
+    event.preventDefault();
+
+    const name = newCompendiumName.trim();
+
+    if (!name) {
+      return;
+    }
+
+    createCompendium.mutate(
+      {
+        name,
+        compendiumType: newCompendiumType,
+      },
+      {
+        onSuccess: () => {
+          setNewCompendiumName('');
+        },
+      },
+    );
+  };
+
+  return (
+    <div className="navigator">
+      <div className="navigator-section">
+        <div className="navigator-section-title">Compendiums</div>
+
+        <form className="navigator-form" onSubmit={onCreateCompendium}>
+          <input
+            value={newCompendiumName}
+            onChange={(event) => setNewCompendiumName(event.target.value)}
+            placeholder="New compendium"
+          />
+
+          <select
+            value={newCompendiumType}
+            onChange={(event) => setNewCompendiumType(event.target.value)}
+            title="Compendium type"
+          >
+            <option value="monster">Monster</option>
+            <option value="spell">Spell</option>
+            <option value="item">Item</option>
+            <option value="feat">Feat</option>
+          </select>
+
+          <button
+            type="submit"
+            disabled={!newCompendiumName.trim() || createCompendium.isPending}
+          >
+            {createCompendium.isPending ? '…' : 'Add'}
+          </button>
+        </form>
+
+        {isLoading && (
+          <div className="empty-state">Loading compendiums…</div>
+        )}
+
+        {!isLoading && compendiums.length === 0 && (
+          <div className="empty-state">No compendiums yet.</div>
+        )}
+
+        <ul className="navigator-list">
+          {compendiums.map((compendium) => (
+            <li key={compendium.id}>
+              <button
+                type="button"
+                className="navigator-item"
+                onClick={() => openCompendiumTab(compendium)}
+              >
+                <span>{compendium.name}</span>
+                <small>{compendium.type}</small>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+/* ========================================= */
+/* Панель Навигатора (Карты и Персонажи)     */
+/* ========================================= */
+
 function NavigatorPanel() {
   const [newMapName, setNewMapName] = useState('');
   const [newCharacterName, setNewCharacterName] = useState('');
-  const [newCharacterType, setNewCharacterType] = useState<'pc' | 'npc' | 'monster'>('pc');
+  const [newCharacterType, setNewCharacterType] = useState<
+    'pc' | 'npc' | 'monster'
+  >('pc');
 
   const { data: activeCampaign } = useActiveCampaign();
 
@@ -28,7 +142,6 @@ function NavigatorPanel() {
   const createCharacter = useCreateCharacter();
 
   const openMapTab = useWorkspaceStore((state) => state.openMapTab);
-
   const openCharacterTab = useWorkspaceStore(
     (state) => state.openCharacterTab,
   );
@@ -89,6 +202,7 @@ function NavigatorPanel() {
 
   return (
     <div className="navigator">
+      {/* Секция Персонажей */}
       <div className="navigator-section">
         <div className="navigator-section-title">Characters</div>
 
@@ -144,6 +258,7 @@ function NavigatorPanel() {
         </ul>
       </div>
 
+      {/* Секция Карт */}
       <div className="navigator-section">
         <div className="navigator-section-title">Maps</div>
 
@@ -191,6 +306,10 @@ function NavigatorPanel() {
   );
 }
 
+/* ========================================= */
+/* Левая панель (контейнер вкладок)          */
+/* ========================================= */
+
 export function LeftPanel() {
   const activeLeftTab = useUiStore((state) => state.activeLeftTab);
 
@@ -203,9 +322,7 @@ export function LeftPanel() {
           <div className="empty-state">Plugin browser will appear here.</div>
         )}
 
-        {activeLeftTab === 'compendiums' && (
-          <div className="empty-state">Compendiums will appear here.</div>
-        )}
+        {activeLeftTab === 'compendiums' && <CompendiumsPanel />}
       </div>
     </aside>
   );

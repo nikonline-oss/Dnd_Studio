@@ -87,6 +87,25 @@ pub struct CharacterDetail {
     pub data_json: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CompendiumSummary {
+    pub id: String,
+    pub name: String,
+    pub source_plugin_id: Option<String>,
+    pub r#type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CompendiumEntrySummary {
+    pub id: String,
+    pub compendium_id: String,
+    pub entry_key: String,
+    pub name: String,
+    pub data_json: String,
+}
+
 #[derive(Debug, thiserror::Error, Serialize, specta::Type)]
 #[serde(tag = "kind", content = "message")]
 pub enum AppError {

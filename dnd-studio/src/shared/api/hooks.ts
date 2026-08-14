@@ -541,3 +541,74 @@ export function useUpdateMapFog() {
 export async function getCharacterDetail(id: string) {
   return unwrap(commands.getCharacter(id));
 }
+
+export function useCompendiums(enabled: boolean = true) {
+  return useQuery({
+    queryKey: ['compendiums'],
+    queryFn: () => unwrap(commands.listCompendiums()),
+    enabled,
+    retry: false,
+  });
+}
+
+export function useCompendiumEntries(compendiumId?: string) {
+  return useQuery({
+    queryKey: ['compendiumEntries', compendiumId],
+    queryFn: () => unwrap(commands.listCompendiumEntries(compendiumId!)),
+    enabled: Boolean(compendiumId),
+    retry: false,
+  });
+}
+
+export function useCreateCompendium() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      name,
+      compendiumType,
+    }: {
+      name: string;
+      compendiumType: string;
+    }) => unwrap(commands.createCompendium(name, compendiumType)),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['compendiums'] });
+    },
+
+    onError: (error) => {
+      logError('api', 'create compendium failed', error);
+    },
+  });
+}
+
+export function useCreateCompendiumEntry() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      compendiumId,
+      entryKey,
+      name,
+      dataJson,
+    }: {
+      compendiumId: string;
+      entryKey: string;
+      name: string;
+      dataJson: string;
+    }) =>
+      unwrap(
+        commands.createCompendiumEntry(compendiumId, entryKey, name, dataJson),
+      ),
+
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['compendiumEntries', variables.compendiumId],
+      });
+    },
+
+    onError: (error) => {
+      logError('api', 'create compendium entry failed', error);
+    },
+  });
+}

@@ -17,6 +17,9 @@ use commands::maps::{
 use commands::tokens::{
     assign_token_character, create_token, delete_token, list_tokens, move_token,
 };
+use commands::compendiums::{
+    create_compendium, create_compendium_entry, list_compendium_entries, list_compendiums,
+};
 use specta_typescript::Typescript;
 use state::{AppPaths, AppState};
 use tauri::Manager;
@@ -51,6 +54,10 @@ fn main() {
             import_map_image,
             read_campaign_asset_data_url,
             update_map_fog,
+            list_compendiums,
+            list_compendium_entries,
+            create_compendium,
+            create_compendium_entry
         ]);
 
     #[cfg(debug_assertions)]

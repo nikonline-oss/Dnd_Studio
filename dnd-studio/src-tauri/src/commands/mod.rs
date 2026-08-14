@@ -3,6 +3,7 @@ pub mod tokens;
 pub mod maps;
 pub mod characters;
 pub mod journal;
+pub mod compendiums;
 
 use dnd_core::AppError;
 use dnd_db::CampaignDb;

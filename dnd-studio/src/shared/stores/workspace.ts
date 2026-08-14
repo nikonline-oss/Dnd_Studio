@@ -7,6 +7,7 @@ export type WorkspaceTabKind =
   | 'map'
   | 'journal'
   | 'character'
+  | 'compendium'
   | 'placeholder';
 
 export interface WorkspaceTab {
@@ -43,6 +44,8 @@ interface WorkspaceState {
   ) => void;
 
   openCharacterTab: (character: { id: string; name: string }) => void;
+
+  openCompendiumTab: (compendium: { id: string; name: string }) => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>()(
@@ -240,6 +243,17 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           kind: 'character',
           title: character.name || 'Character',
           entityId: character.id,
+        });
+      },
+
+      openCompendiumTab: (compendium) => {
+        logDebug('workspace', 'openCompendiumTab', compendium);
+
+        get().openTab({
+          id: `compendium:${compendium.id}`,
+          kind: 'compendium',
+          title: compendium.name || 'Compendium',
+          entityId: compendium.id,
         });
       },
     }),
