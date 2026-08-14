@@ -1,6 +1,6 @@
 use dnd_core::{
-    AppError, CampaignSummary, CharacterSummary, JournalEntryDetail, JournalEntrySummary,
-    MapSummary, TokenSummary, CharacterDetail
+    AppError, CampaignSummary, CharacterDetail, CharacterSummary, JournalEntryDetail,
+    JournalEntrySummary, MapSummary, TokenSummary,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
@@ -716,6 +716,60 @@ impl CampaignDb {
         }
 
         self.get_character(id).await?.ok_or(AppError::NotFound)
+    }
+
+    pub fn assets_dir(&self) -> std::path::PathBuf {
+        let parent = self
+            .path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new(""));
+
+        let stem = self
+            .path
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .unwrap_or("campaign");
+
+        parent.join(format!("{stem}.assets"))
+    }
+
+    pub fn resolve_asset_path(&self, relative_path: &str) -> Result<std::path::PathBuf, AppError> {
+        let mut rel = relative_path.trim().trim_start_matches('/');
+
+        if let Some(stripped) = rel.strip_prefix("assets/") {
+            rel = stripped;
+        }
+
+        if rel.is_empty() || rel.contains("..") {
+            return Err(AppError::Validation("Invalid asset path".to_string()));
+        }
+
+        Ok(self.assets_dir().join(rel))
+    }
+
+    pub async fn update_map_image_path(
+        &self,
+        map_id: &str,
+        image_path: &str,
+    ) -> Result<MapSummary, AppError> {
+        let result = sqlx::query(
+            r#"
+        UPDATE maps
+        SET image_path = ?
+        WHERE id = ?
+        "#,
+        )
+        .bind(image_path)
+        .bind(map_id)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        self.get_map(map_id).await?.ok_or(AppError::NotFound)
     }
 }
 

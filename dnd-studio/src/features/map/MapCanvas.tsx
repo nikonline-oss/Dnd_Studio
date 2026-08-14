@@ -4,7 +4,7 @@ import {
     useRef,
     useState,
 } from 'react';
-
+import { readCampaignAssetDataUrl } from '../../shared/api/hooks';
 import type { MapSummary, TokenSummary } from '../../shared/api/bindings';
 
 interface Viewport {
@@ -101,6 +101,7 @@ export function MapCanvas({
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
     const dragSessionRef = useRef(0);
+    const imageRef = useRef<HTMLImageElement | null>(null);
 
     const [size, setSize] = useState({
         width: 0,
@@ -109,6 +110,7 @@ export function MapCanvas({
 
     const [viewport, setViewport] = useState<Viewport | null>(null);
     const [themeVersion, setThemeVersion] = useState(0);
+    const [imageVersion, setImageVersion] = useState(0);
 
     const [dragTokenPosition, setDragTokenPosition] = useState<{
         tokenId: string;
@@ -340,6 +342,65 @@ export function MapCanvas({
         };
     }, []);
 
+    // Загрузка изображения карты.
+    useEffect(() => {
+        let cancelled = false;
+
+        imageRef.current = null;
+        setImageVersion((version) => version + 1);
+
+        const relativePath = map.imagePath;
+
+        if (!relativePath) {
+            return;
+        }
+
+        if (relativePath.startsWith('placeholder://')) {
+            return;
+        }
+
+        readCampaignAssetDataUrl(relativePath)
+            .then((dataUrl) => {
+                if (cancelled) {
+                    return;
+                }
+
+                const image = new Image();
+
+                image.onload = () => {
+                    if (cancelled) {
+                        return;
+                    }
+
+                    imageRef.current = image;
+                    setImageVersion((version) => version + 1);
+                };
+
+                image.onerror = () => {
+                    if (cancelled) {
+                        return;
+                    }
+
+                    imageRef.current = null;
+                    setImageVersion((version) => version + 1);
+                };
+
+                image.src = dataUrl;
+            })
+            .catch(() => {
+                if (cancelled) {
+                    return;
+                }
+
+                imageRef.current = null;
+                setImageVersion((version) => version + 1);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [map.id, map.imagePath]);
+
     // Отрисовка.
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -387,8 +448,14 @@ export function MapCanvas({
         ctx.scale(viewport.scale, viewport.scale);
 
         // Область карты.
-        ctx.fillStyle = 'rgba(128, 128, 160, 0.06)';
-        ctx.fillRect(0, 0, map.width, map.height);
+        const mapImage = imageRef.current;
+
+        if (mapImage && mapImage.complete && mapImage.naturalWidth > 0) {
+            ctx.drawImage(mapImage, 0, 0, map.width, map.height);
+        } else {
+            ctx.fillStyle = 'rgba(128, 128, 160, 0.06)';
+            ctx.fillRect(0, 0, map.width, map.height);
+        }
 
         // Сетка.
         const gridSize = map.gridSize > 0 ? map.gridSize : 50;
@@ -490,6 +557,7 @@ export function MapCanvas({
         dragTokenPosition,
         tokenRadius,
         themeVersion,
+        imageVersion,
         getTokenPosition,
     ]);
 

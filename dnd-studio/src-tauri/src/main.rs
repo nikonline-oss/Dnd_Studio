@@ -6,7 +6,7 @@ mod state;
 use commands::campaign::{
     close_campaign, create_campaign, get_active_campaign, list_campaigns, open_campaign,
 };
-use commands::maps::{create_map, list_maps, get_map};
+use commands::maps::{create_map, list_maps, get_map, import_map_image, read_campaign_asset_data_url};
 use commands::tokens::{
     create_token,
     delete_token,
@@ -50,7 +50,9 @@ fn main() {
         update_journal_entry,
         delete_journal_entry,
         get_character,
-        update_character
+        update_character,
+        import_map_image,
+        read_campaign_asset_data_url,
     ]);
 
     #[cfg(debug_assertions)]

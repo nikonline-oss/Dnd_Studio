@@ -35,3 +35,4 @@ uuid.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true
 specta-typescript = "0.0.12"
+base64 = "0.22"

@@ -49,6 +49,8 @@ export const commands = {
 	dataJson: string,
 } | null, AppError>(__TAURI_INVOKE("get_character", { id })),
 	updateCharacter: (id: string, name: string, characterType: string, dataJson: string) => typedError<CharacterDetail, AppError>(__TAURI_INVOKE("update_character", { id, name, characterType, dataJson })),
+	importMapImage: (mapId: string, sourcePath: string) => typedError<MapSummary, AppError>(__TAURI_INVOKE("import_map_image", { mapId, sourcePath })),
+	readCampaignAssetDataUrl: (relativePath: string) => typedError<string, AppError>(__TAURI_INVOKE("read_campaign_asset_data_url", { relativePath })),
 };
 
 /* Types */

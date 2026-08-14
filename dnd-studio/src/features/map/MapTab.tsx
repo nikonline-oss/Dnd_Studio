@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { open } from '@tauri-apps/plugin-dialog';
 
 import {
   useCharacters,
   useCreateToken,
   useDeleteToken,
+  useImportMapImage,
   useMap,
   useMoveToken,
   useTokens,
@@ -19,6 +21,7 @@ export function MapTab({ mapId }: { mapId?: string }) {
   const createToken = useCreateToken();
   const moveToken = useMoveToken();
   const deleteToken = useDeleteToken();
+  const importMapImage = useImportMapImage();
 
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [pendingDeleteTokenIds, setPendingDeleteTokenIds] = useState<string[]>([]);
@@ -116,12 +119,42 @@ export function MapTab({ mapId }: { mapId?: string }) {
     }
   };
 
+  const handleLoadImage = async () => {
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [
+          {
+            name: 'Images',
+            extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'],
+          },
+        ],
+      });
+
+      if (typeof selected === 'string') {
+        importMapImage.mutate({
+          mapId: map.id,
+          sourcePath: selected,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to select image', error);
+    }
+  };
+
   return (
     <div className="map-tab">
       <div className="map-tab-header">
         <span>{map.name}</span>
 
         <div className="map-tab-actions">
+          <button
+            type="button"
+            onClick={handleLoadImage}
+            disabled={importMapImage.isPending}
+          >
+            {importMapImage.isPending ? 'Loading…' : 'Load image'}
+          </button>
           <select
             value={selectedCharacterId}
             onChange={(event) => setSelectedCharacterId(event.target.value)}

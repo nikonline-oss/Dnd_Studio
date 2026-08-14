@@ -373,7 +373,7 @@ export function useUpdateJournalEntry() {
         ),
       ),
 
-    onSuccess: (data, variables) => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
       queryClient.invalidateQueries({
         queryKey: ['journalEntry', variables.id],
@@ -445,6 +445,40 @@ export function useUpdateCharacter() {
 
     onError: (error) => {
       logError('api', 'update character failed', error);
+    },
+  });
+}
+
+export async function readCampaignAssetDataUrl(
+  relativePath: string,
+): Promise<string> {
+  return unwrap(commands.readCampaignAssetDataUrl(relativePath));
+}
+
+export function useImportMapImage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      mapId,
+      sourcePath,
+    }: {
+      mapId: string;
+      sourcePath: string;
+    }) => unwrap(commands.importMapImage(mapId, sourcePath)),
+
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['map', variables.mapId],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ['maps'],
+      });
+    },
+
+    onError: (error) => {
+      logError('api', 'import map image failed', error);
     },
   });
 }
