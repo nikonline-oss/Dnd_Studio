@@ -4,9 +4,12 @@ import {
   useActiveCampaign,
   useMaps,
   useTokens,
+  getCharacterDetail,
 } from '../../shared/api/hooks';
-import { useEncounterStore } from '../../shared/stores/encounter';
+import { useEncounterStore, type EncounterEntry } from '../../shared/stores/encounter';
 import { useWorkspaceStore } from '../../shared/stores/workspace';
+import { rollExpression } from '../../shared/lib/dice';
+import { useChatStore } from '../../shared/stores/chat';
 
 export function InitiativePanel() {
   const { data: activeCampaign } = useActiveCampaign();
@@ -32,6 +35,8 @@ export function InitiativePanel() {
   const pruneMissingTokens = useEncounterStore(
     (state) => state.pruneMissingTokens,
   );
+
+  const addDiceRoll = useChatStore((state) => state.addDiceRoll);
 
   const activeMapTab = tabs.find(
     (tab) => tab.id === activeTabId && tab.kind === 'map',
@@ -103,18 +108,73 @@ export function InitiativePanel() {
     );
   }
 
-  const handleAddTokens = () => {
+  const handleAddTokens = async () => {
     const existingTokenIds = new Set(entries.map((entry) => entry.tokenId));
 
-    const tokensToAdd = tokens
-      .filter((token) => !existingTokenIds.has(token.id))
-      .map((token, index) => ({
-        tokenId: token.id,
-        label: token.characterName ?? `Token ${index + 1}`,
-        initiative: 0,
-      }));
+    const tokensToAdd = tokens.filter(
+      (token) => !existingTokenIds.has(token.id),
+    );
 
-    addTokens(effectiveMapId, tokensToAdd);
+    // Обогащаем данные персонажами для получения модификатора инициативы
+    const enrichedTokens = await Promise.all(
+      tokensToAdd.map(async (token, index) => {
+        let label = token.characterName ?? `Token ${index + 1}`;
+        let initiativeMod = 0;
+        const characterId = token.characterId ?? null;
+
+        if (token.characterId) {
+          try {
+            const character = await getCharacterDetail(token.characterId);
+            if (character) {
+              label = character.name;
+              try {
+                const data = JSON.parse(character.dataJson || '{}');
+                initiativeMod = Number(data.initiativeMod) || 0;
+              } catch {
+                // ignore invalid json
+              }
+            }
+          } catch (error) {
+            console.error('Failed to load character for initiative', error);
+          }
+        }
+
+        return {
+          tokenId: token.id,
+          label,
+          initiative: 0,
+          initiativeMod,
+          characterId,
+        };
+      }),
+    );
+
+    addTokens(effectiveMapId, enrichedTokens);
+  };
+
+  const rollInitiativeForEntry = (entry: EncounterEntry) => {
+    const modStr =
+      entry.initiativeMod >= 0
+        ? `+${entry.initiativeMod}`
+        : `${entry.initiativeMod}`;
+    
+    const roll = rollExpression(`1d20${modStr}`);
+
+    if (roll) {
+      setInitiative(effectiveMapId, entry.id, roll.total);
+      
+      // Отправляем результат в чат
+      addDiceRoll(activeCampaign.id, {
+        ...roll,
+        input: `${entry.label}: 1d20${modStr}`,
+      });
+    }
+  };
+
+  const rollAllInitiative = () => {
+    sortedEntries.forEach((entry) => {
+      rollInitiativeForEntry(entry);
+    });
   };
 
   return (
@@ -140,6 +200,14 @@ export function InitiativePanel() {
             disabled={areTokensLoading || tokens.length === 0}
           >
             Add tokens
+          </button>
+
+          <button
+            type="button"
+            onClick={rollAllInitiative}
+            disabled={entries.length === 0}
+          >
+            Roll All
           </button>
 
           <button
@@ -187,6 +255,7 @@ export function InitiativePanel() {
           <div className="initiative-table">
             <div className="initiative-row initiative-row-header">
               <span>Combatant</span>
+              <span>Mod</span>
               <span>Initiative</span>
               <span>Active</span>
               <span />
@@ -206,17 +275,33 @@ export function InitiativePanel() {
                 >
                   <span>{entry.label}</span>
 
-                  <input
-                    type="number"
-                    value={entry.initiative}
-                    onChange={(event) =>
-                      setInitiative(
-                        effectiveMapId,
-                        entry.id,
-                        Number(event.target.value) || 0,
-                      )
-                    }
-                  />
+                  <span className="initiative-mod">
+                    {entry.initiativeMod >= 0
+                      ? `+${entry.initiativeMod}`
+                      : entry.initiativeMod}
+                  </span>
+
+                  <div className="initiative-value">
+                    <input
+                      type="number"
+                      value={entry.initiative}
+                      onChange={(event) =>
+                        setInitiative(
+                          effectiveMapId,
+                          entry.id,
+                          Number(event.target.value) || 0,
+                        )
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="initiative-roll-btn"
+                      onClick={() => rollInitiativeForEntry(entry)}
+                      title={`Roll initiative (${entry.initiativeMod >= 0 ? '+' : ''}${entry.initiativeMod})`}
+                    >
+                      🎲
+                    </button>
+                  </div>
 
                   <span>{isActive ? '▶' : ''}</span>
 

@@ -1038,7 +1038,7 @@ select:focus-visible {
 
 .initiative-row {
   display: grid;
-  grid-template-columns: 1fr 100px 60px 40px;
+  grid-template-columns: 1fr 60px 140px 60px 40px;
   align-items: center;
   gap: 10px;
 
@@ -1070,6 +1070,34 @@ select:focus-visible {
   box-shadow:
     0 0 0 1px var(--gold-softer),
     0 0 16px rgba(212, 175, 55, 0.14);
+}
+
+.initiative-mod {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.initiative-value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.initiative-value input {
+  flex: 1;
+  min-width: 0;
+}
+
+.initiative-roll-btn {
+  padding: 4px 8px;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: 6px;
+}
+
+.initiative-row-header {
+  grid-template-columns: 1fr 60px 140px 60px 40px;
 }
 
 /* Chat */

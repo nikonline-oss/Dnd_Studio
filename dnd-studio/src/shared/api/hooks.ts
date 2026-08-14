@@ -537,3 +537,7 @@ export function useUpdateMapFog() {
     },
   });
 }
+
+export async function getCharacterDetail(id: string) {
+  return unwrap(commands.getCharacter(id));
+}
