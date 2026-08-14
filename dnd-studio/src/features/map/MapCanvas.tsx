@@ -13,17 +13,19 @@ interface Viewport {
     scale: number;
 }
 
+export type FogMode = 'none' | 'add' | 'remove';
+
 interface MapCanvasProps {
     map: MapSummary;
     tokens?: TokenSummary[];
     selectedTokenId?: string | null;
     onSelectToken?: (tokenId: string | null) => void;
-    onMoveToken?: (
-        tokenId: string,
-        x: number,
-        y: number,
-    ) => Promise<void>;
+    onMoveToken?: (tokenId: string, x: number, y: number) => Promise<void>;
     showGrid?: boolean;
+
+    fogCells?: Set<string>; // Формат "x,y"
+    fogMode?: FogMode;
+    onFogChange?: (cells: Set<string>) => void;
 }
 
 type DragState =
@@ -98,6 +100,9 @@ export function MapCanvas({
     onSelectToken,
     onMoveToken,
     showGrid = true,
+    fogCells = new Set(),
+    fogMode = 'none',
+    onFogChange,
 }: MapCanvasProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -122,6 +127,11 @@ export function MapCanvas({
 
     const dragRef = useRef<DragState | null>(null);
     const fittedMapIdRef = useRef<string | null>(null);
+    const fogDragRef = useRef<{
+        pointerId: number;
+        mode: 'add' | 'remove';
+        modified: Set<string>;
+    } | null>(null);
 
     const tokenRadius = Math.max(10, (map.gridSize || 50) * 0.45);
 
@@ -547,6 +557,35 @@ export function MapCanvas({
             drawToken(draggingToken);
         }
 
+        // Туман войны
+        if (fogCells.size > 0) {
+            ctx.fillStyle = 'rgba(10, 12, 18, 0.85)';
+
+            ctx.beginPath();
+
+            const gridSize = map.gridSize > 0 ? map.gridSize : 50;
+
+            fogCells.forEach((cellKey) => {
+                const [xStr, yStr] = cellKey.split(',');
+                const cellX = Number.parseInt(xStr, 10);
+                const cellY = Number.parseInt(yStr, 10);
+
+                ctx.rect(
+                    cellX * gridSize,
+                    cellY * gridSize,
+                    gridSize,
+                    gridSize
+                );
+            });
+
+            ctx.fill();
+
+            // Обводка для красоты (опционально)
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.lineWidth = 1 / viewport.scale;
+            ctx.stroke();
+        }
+
         ctx.restore();
     }, [
         size.width,
@@ -563,34 +602,54 @@ export function MapCanvas({
         themeVersion,
         imageVersion,
         getTokenPosition,
-        showGrid
+        showGrid,
+        fogCells,
     ]);
+    const getCellKey = (worldX: number, worldY: number): string => {
+        const gridSize = map.gridSize > 0 ? map.gridSize : 50;
+        const cellX = Math.floor(worldX / gridSize);
+        const cellY = Math.floor(worldY / gridSize);
+        return `${cellX},${cellY}`;
+    };
 
-    const onPointerDown = (
-        event: React.PointerEvent<HTMLDivElement>,
-    ) => {
-        if (event.button !== 0 && event.button !== 1) {
-            return;
-        }
-
-        if (!viewport) {
-            return;
-        }
-
-        if (event.button === 1) {
-            event.preventDefault();
-        }
+    const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+        if (event.button !== 0 && event.button !== 1 && event.button !== 2) return;
+        if (!viewport) return;
 
         event.currentTarget.setPointerCapture(event.pointerId);
-
         const world = screenToWorld(event.clientX, event.clientY);
+
+        // РЕЖИМ ТУМАНА
+        if (fogMode !== 'none' && event.button === 0) {
+            event.preventDefault();
+            const key = getCellKey(world.x, world.y);
+            const newCells = new Set(fogCells);
+
+            if (fogMode === 'add') {
+                newCells.add(key);
+            } else {
+                newCells.delete(key);
+            }
+
+            fogDragRef.current = {
+                pointerId: event.pointerId,
+                mode: fogMode,
+                modified: newCells,
+            };
+
+            // Мгновенно обновляем UI
+            onFogChange?.(newCells);
+            return;
+        }
+
+        // ОБЫЧНЫЙ РЕЖИМ (Токены и Панорамирование)
+        if (event.button === 1) event.preventDefault();
+
         const hitToken = findTokenAt(world.x, world.y);
 
-        if (hitToken) {
+        if (hitToken && event.button === 0) {
             onSelectToken?.(hitToken.id);
-
             const position = getTokenPosition(hitToken);
-
             const sessionId = ++dragSessionRef.current;
 
             dragRef.current = {
@@ -601,7 +660,6 @@ export function MapCanvas({
                 offsetY: world.y - (position.y != null ? position.y : 0),
                 sessionId,
             };
-
             return;
         }
 
@@ -616,80 +674,64 @@ export function MapCanvas({
         };
     };
 
-    const onPointerMove = (
-        event: React.PointerEvent<HTMLDivElement>,
-    ) => {
-        const drag = dragRef.current;
+    const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+        // ТУМАН
+        const fogDrag = fogDragRef.current;
+        if (fogDrag && fogDrag.pointerId === event.pointerId) {
+            const world = screenToWorld(event.clientX, event.clientY);
+            const key = getCellKey(world.x, world.y);
 
-        if (!drag || drag.pointerId !== event.pointerId) {
+            if (fogDrag.mode === 'add') {
+                fogDrag.modified.add(key);
+            } else {
+                fogDrag.modified.delete(key);
+            }
+
+            onFogChange?.(fogDrag.modified);
             return;
         }
+
+        // ТОКЕНЫ И ПАНОРАМИРОВАНИЕ
+        const drag = dragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) return;
 
         if (drag.kind === 'pan') {
             const dx = event.clientX - drag.startX;
             const dy = event.clientY - drag.startY;
-
-            setViewport({
-                ...drag.origin,
-                x: drag.origin.x + dx,
-                y: drag.origin.y + dy,
-            });
-
-            return;
-        }
-
-        const world = screenToWorld(event.clientX, event.clientY);
-
-        const x = clampNumber(
-            world.x - drag.offsetX,
-            0,
-            map.width,
-        );
-
-        const y = clampNumber(
-            world.y - drag.offsetY,
-            0,
-            map.height,
-        );
-
-        setDragTokenPosition({
-            tokenId: drag.tokenId,
-            x,
-            y,
-        });
-    };
-
-    const onPointerUp = (
-        event: React.PointerEvent<HTMLDivElement>,
-    ) => {
-        const drag = dragRef.current;
-
-        if (!drag || drag.pointerId !== event.pointerId) {
+            setViewport({ ...drag.origin, x: drag.origin.x + dx, y: drag.origin.y + dy });
             return;
         }
 
         if (drag.kind === 'token') {
             const world = screenToWorld(event.clientX, event.clientY);
+            const x = clampNumber(world.x - drag.offsetX, 0, map.width);
+            const y = clampNumber(world.y - drag.offsetY, 0, map.height);
+            setDragTokenPosition({ tokenId: drag.tokenId, x, y });
+        }
+    };
 
-            const x = clampNumber(
-                world.x - drag.offsetX,
-                0,
-                map.width,
-            );
+    const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+        // ТУМАН
+        if (fogDragRef.current?.pointerId === event.pointerId) {
+            fogDragRef.current = null;
+            // onFogChange уже вызывался, сохранение в БД сделает MapTab через debounce
+            return;
+        }
 
-            const y = clampNumber(
-                world.y - drag.offsetY,
-                0,
-                map.height,
-            );
+        // ТОКЕНЫ
+        const drag = dragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+
+        if (drag.kind === 'token') {
+            const world = screenToWorld(event.clientX, event.clientY);
+            const x = clampNumber(world.x - drag.offsetX, 0, map.width);
+            const y = clampNumber(world.y - drag.offsetY, 0, map.height);
 
             const session = drag.sessionId;
 
             if (onMoveToken) {
                 onMoveToken(drag.tokenId, x, y)
-                    .catch(() => {
-                        // Ошибка уже обрабатывается в hooks / rollback.
-                    })
+                    .catch(() => { })
                     .finally(() => {
                         if (dragSessionRef.current === session) {
                             setDragTokenPosition(null);
@@ -708,6 +750,10 @@ export function MapCanvas({
             <div
                 ref={containerRef}
                 className="map-canvas-container"
+                style={{
+                    cursor: fogMode !== 'none' ? 'crosshair' : undefined,
+                }}
+                onContextMenu={(e) => e.preventDefault()}
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}

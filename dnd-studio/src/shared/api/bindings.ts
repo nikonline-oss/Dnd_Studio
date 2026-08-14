@@ -24,6 +24,7 @@ export const commands = {
 	gridSize: number,
 	width: number,
 	height: number,
+	fogData: string | null,
 } | null, AppError>(__TAURI_INVOKE("get_map", { id })),
 	createToken: (mapId: string, x: number | null, y: number | null, characterId: string | null) => typedError<TokenSummary, AppError>(__TAURI_INVOKE("create_token", { mapId, x, y, characterId })),
 	listTokens: (mapId: string) => typedError<TokenSummary[], AppError>(__TAURI_INVOKE("list_tokens", { mapId })),
@@ -52,6 +53,7 @@ export const commands = {
 	updateCharacter: (id: string, name: string, characterType: string, dataJson: string) => typedError<CharacterDetail, AppError>(__TAURI_INVOKE("update_character", { id, name, characterType, dataJson })),
 	importMapImage: (mapId: string, sourcePath: string) => typedError<MapSummary, AppError>(__TAURI_INVOKE("import_map_image", { mapId, sourcePath })),
 	readCampaignAssetDataUrl: (relativePath: string) => typedError<string, AppError>(__TAURI_INVOKE("read_campaign_asset_data_url", { relativePath })),
+	updateMapFog: (mapId: string, fogData: string | null) => typedError<null, AppError>(__TAURI_INVOKE("update_map_fog", { mapId, fogData })),
 };
 
 /* Types */
@@ -108,6 +110,7 @@ export type MapSummary = {
 	gridSize: number,
 	width: number,
 	height: number,
+	fogData: string | null,
 };
 
 export type TokenSummary = {

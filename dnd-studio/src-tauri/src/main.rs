@@ -6,56 +6,52 @@ mod state;
 use commands::campaign::{
     close_campaign, create_campaign, get_active_campaign, list_campaigns, open_campaign,
 };
-use commands::maps::{create_map, list_maps, get_map, import_map_image, read_campaign_asset_data_url};
-use commands::tokens::{
-    create_token,
-    delete_token,
-    list_tokens,
-    move_token,
-    assign_token_character,
-};
-use commands::characters::{create_character, list_characters, get_character, update_character};
+use commands::characters::{create_character, get_character, list_characters, update_character};
 use commands::journal::{
-    create_journal_entry,
-    delete_journal_entry,
-    get_journal_entry,
-    list_journal_entries,
+    create_journal_entry, delete_journal_entry, get_journal_entry, list_journal_entries,
     update_journal_entry,
 };
+use commands::maps::{
+    create_map, get_map, import_map_image, list_maps, read_campaign_asset_data_url, update_map_fog,
+};
+use commands::tokens::{
+    assign_token_character, create_token, delete_token, list_tokens, move_token,
+};
+use specta_typescript::Typescript;
 use state::{AppPaths, AppState};
 use tauri::Manager;
-use specta_typescript::Typescript;
 
 pub struct Commands;
 
 fn main() {
-    let builder = tauri_specta::Builder::<tauri::Wry>::new()
-    .commands(tauri_specta::collect_commands![
-        create_campaign,
-        list_campaigns,
-        open_campaign,
-        close_campaign,
-        get_active_campaign,
-        create_map,
-        list_maps,
-        get_map,
-        create_token,
-        list_tokens,
-        move_token,
-        delete_token,
-        assign_token_character,
-        create_character,
-        list_characters,
-        create_journal_entry,
-        list_journal_entries,
-        get_journal_entry,
-        update_journal_entry,
-        delete_journal_entry,
-        get_character,
-        update_character,
-        import_map_image,
-        read_campaign_asset_data_url,
-    ]);
+    let builder =
+        tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
+            create_campaign,
+            list_campaigns,
+            open_campaign,
+            close_campaign,
+            get_active_campaign,
+            create_map,
+            list_maps,
+            get_map,
+            create_token,
+            list_tokens,
+            move_token,
+            delete_token,
+            assign_token_character,
+            create_character,
+            list_characters,
+            create_journal_entry,
+            list_journal_entries,
+            get_journal_entry,
+            update_journal_entry,
+            delete_journal_entry,
+            get_character,
+            update_character,
+            import_map_image,
+            read_campaign_asset_data_url,
+            update_map_fog,
+        ]);
 
     #[cfg(debug_assertions)]
     {

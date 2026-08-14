@@ -119,3 +119,15 @@ pub async fn read_campaign_asset_data_url(
 
     Ok(format!("data:{mime};base64,{encoded}"))
 }
+
+#[tauri::command]
+#[specta::specta]
+pub async fn update_map_fog(
+    state: State<'_, AppState>,
+    map_id: String,
+    fog_data: Option<String>,
+) -> Result<(), AppError> {
+    let db = require_db(&state.campaign).await?;
+
+    db.update_map_fog(&map_id, fog_data).await
+}

@@ -1581,3 +1581,33 @@ select:focus-visible {
 .inspector button {
   width: 100%;
 }
+
+.map-fog-controls {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--panel);
+  border: 1px solid var(--border-gold);
+  border-radius: 6px;
+  margin-right: 8px;
+}
+
+.map-fog-controls button {
+  padding: 4px 8px;
+  font-size: 12px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 4px;
+}
+
+.map-fog-controls button:hover {
+  background: var(--gold-softer);
+  color: var(--text);
+}
+
+.map-fog-controls button.active {
+  background: var(--gold-soft);
+  color: var(--gold);
+  font-weight: bold;
+}

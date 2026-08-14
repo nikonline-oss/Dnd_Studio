@@ -164,23 +164,18 @@ impl CampaignDb {
             grid_size,
             width,
             height,
+            fog_data: None,
         })
     }
 
     pub async fn list_maps(&self) -> Result<Vec<MapSummary>, AppError> {
         let rows = sqlx::query_as::<_, (String, String, String, String, i32, i32, i32)>(
             r#"
-            SELECT
-                id,
-                world_id,
-                name,
-                image_path,
-                grid_size,
-                width,
-                height
-            FROM maps
-            ORDER BY name
-            "#,
+        SELECT
+            id, world_id, name, image_path, grid_size, width, height
+        FROM maps
+        ORDER BY name
+        "#,
         )
         .fetch_all(&self.pool)
         .await
@@ -197,22 +192,29 @@ impl CampaignDb {
                     grid_size,
                     width,
                     height,
+                    fog_data: None,
                 },
             )
             .collect())
     }
 
     pub async fn get_map(&self, id: &str) -> Result<Option<MapSummary>, AppError> {
-        let row = sqlx::query_as::<_, (String, String, String, String, i32, i32, i32)>(
+        let row = sqlx::query_as::<
+            _,
+            (
+                String,
+                String,
+                String,
+                String,
+                i32,
+                i32,
+                i32,
+                Option<String>,
+            ),
+        >(
             r#"
         SELECT
-            id,
-            world_id,
-            name,
-            image_path,
-            grid_size,
-            width,
-            height
+            id, world_id, name, image_path, grid_size, width, height, fog_data
         FROM maps
         WHERE id = ?
         "#,
@@ -223,7 +225,7 @@ impl CampaignDb {
         .map_err(AppError::db)?;
 
         Ok(row.map(
-            |(id, world_id, name, image_path, grid_size, width, height)| MapSummary {
+            |(id, world_id, name, image_path, grid_size, width, height, fog_data)| MapSummary {
                 id,
                 world_id,
                 name,
@@ -231,6 +233,7 @@ impl CampaignDb {
                 grid_size,
                 width,
                 height,
+                fog_data,
             },
         ))
     }
@@ -808,6 +811,31 @@ impl CampaignDb {
         }
 
         self.fetch_token(token_id).await
+    }
+
+    pub async fn update_map_fog(
+        &self,
+        map_id: &str,
+        fog_data: Option<String>,
+    ) -> Result<(), AppError> {
+        let result = sqlx::query(
+            r#"
+        UPDATE maps
+        SET fog_data = ?
+        WHERE id = ?
+        "#,
+        )
+        .bind(&fog_data)
+        .bind(map_id)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        Ok(())
     }
 }
 

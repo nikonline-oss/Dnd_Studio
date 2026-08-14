@@ -30,6 +30,7 @@ pub struct MapSummary {
     pub grid_size: i32,
     pub width: i32,
     pub height: i32,
+    pub fog_data: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]

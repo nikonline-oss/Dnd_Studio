@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useUpdateMapFog } from '../../shared/api/hooks';
 import { open } from '@tauri-apps/plugin-dialog';
 
 import {
@@ -24,10 +25,10 @@ export function MapTab({ mapId }: { mapId?: string }) {
   const moveToken = useMoveToken();
   const deleteToken = useDeleteToken();
   const importMapImage = useImportMapImage();
-  
+
   const showGridByMap = useMapSettingsStore((state) => state.showGridByMap);
   const toggleGrid = useMapSettingsStore((state) => state.toggleGrid);
-  
+
   const setSelectedMapId = useTableStore((state) => state.setSelectedMapId);
   const setSelectedTokenIdGlobal = useTableStore(
     (state) => state.setSelectedTokenId,
@@ -37,7 +38,60 @@ export function MapTab({ mapId }: { mapId?: string }) {
   const [pendingDeleteTokenIds, setPendingDeleteTokenIds] = useState<string[]>([]);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string>('');
 
-  // 1. Хуки useEffect ДОЛЖНЫ быть здесь, до любых if/return
+  const updateMapFog = useUpdateMapFog();
+  const [fogMode, setFogMode] = useState<'none' | 'add' | 'remove'>('none');
+  const saveFogTimeoutRef = useRef<number | null>(null);
+
+  // Локальное состояние тумана
+  const [localFogCells, setLocalFogCells] = useState<Set<string>>(new Set());
+
+  // Синхронизация с БД при загрузке карты
+  useEffect(() => {
+    if (map?.fogData) {
+      try {
+        const parsed = JSON.parse(map.fogData);
+        if (Array.isArray(parsed)) {
+          setLocalFogCells(new Set(parsed));
+        } else {
+          setLocalFogCells(new Set());
+        }
+      } catch {
+        setLocalFogCells(new Set());
+      }
+    } else {
+      setLocalFogCells(new Set());
+    }
+  }, [map?.id, map?.fogData]);
+
+  // Debounce сохранения
+  useEffect(() => {
+    if (!map) return;
+
+    if (saveFogTimeoutRef.current) {
+      window.clearTimeout(saveFogTimeoutRef.current);
+    }
+
+    saveFogTimeoutRef.current = window.setTimeout(() => {
+      const array = Array.from(localFogCells);
+      const fogData = array.length > 0 ? JSON.stringify(array) : null;
+
+      const currentDbArray = map.fogData ? JSON.parse(map.fogData) : [];
+      if (JSON.stringify(array) !== JSON.stringify(currentDbArray)) {
+        updateMapFog.mutate({ mapId: map.id, fogData });
+      }
+    }, 800);
+
+    return () => {
+      if (saveFogTimeoutRef.current) {
+        window.clearTimeout(saveFogTimeoutRef.current);
+      }
+    };
+  }, [localFogCells, map, updateMapFog]);
+
+  const handleFogChange = useCallback((newCells: Set<string>) => {
+    setLocalFogCells(new Set(newCells));
+  }, []);
+
   useEffect(() => {
     if (map) {
       setSelectedMapId(map.id);
@@ -182,6 +236,40 @@ export function MapTab({ mapId }: { mapId?: string }) {
         <span>{map.name}</span>
 
         <div className="map-tab-actions">
+          <div className="map-fog-controls">
+            <button
+              type="button"
+              className={fogMode === 'none' ? 'active' : ''}
+              onClick={() => setFogMode('none')}
+              title="Navigation mode"
+            >
+              Map
+            </button>
+            <button
+              type="button"
+              className={fogMode === 'add' ? 'active' : ''}
+              onClick={() => setFogMode('add')}
+              title="Add Fog"
+            >
+              Fog +
+            </button>
+            <button
+              type="button"
+              className={fogMode === 'remove' ? 'active' : ''}
+              onClick={() => setFogMode('remove')}
+              title="Remove Fog"
+            >
+              Fog -
+            </button>
+            <button
+              type="button"
+              onClick={() => handleFogChange(new Set())}
+              title="Clear all fog"
+              disabled={localFogCells.size === 0}
+            >
+              Clear
+            </button>
+          </div>
           <button
             type="button"
             onClick={handleLoadImage}
@@ -189,7 +277,7 @@ export function MapTab({ mapId }: { mapId?: string }) {
           >
             {importMapImage.isPending ? 'Loading…' : 'Load image'}
           </button>
-          
+
           <label className="map-grid-toggle">
             <input
               type="checkbox"
@@ -198,7 +286,7 @@ export function MapTab({ mapId }: { mapId?: string }) {
             />
             Grid
           </label>
-          
+
           <select
             value={selectedCharacterId}
             onChange={(event) => setSelectedCharacterId(event.target.value)}
@@ -242,6 +330,9 @@ export function MapTab({ mapId }: { mapId?: string }) {
         onSelectToken={setSelectedTokenId}
         onMoveToken={handleMoveToken}
         showGrid={showGrid}
+        fogCells={localFogCells}
+        fogMode={fogMode}
+        onFogChange={handleFogChange}
       />
     </div>
   );

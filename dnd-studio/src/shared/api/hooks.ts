@@ -511,3 +511,29 @@ export function useAssignTokenCharacter() {
     },
   });
 }
+
+export function useUpdateMapFog() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      mapId,
+      fogData,
+    }: {
+      mapId: string;
+      fogData: string | null;
+    }) => unwrap(commands.updateMapFog(mapId, fogData)),
+
+    onSuccess: (_data, variables) => {
+      // Обновляем кэш карты, чтобы при переключении вкладок туман не пропадал
+      queryClient.setQueryData(['map', variables.mapId], (old: any) => {
+        if (!old) return old;
+        return { ...old, fogData: variables.fogData };
+      });
+    },
+
+    onError: (error) => {
+      logError('api', 'update map fog failed', error);
+    },
+  });
+}
