@@ -7,7 +7,9 @@ import {
   useCreateCharacter,
   useCreateCompendium,
   useCreateMap,
+  useDeleteCompendium,
   useMaps,
+  useUpdateCompendium,
 } from '../api/hooks';
 import { useUiStore } from '../stores/ui';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -15,10 +17,11 @@ import { useWorkspaceStore } from '../stores/workspace';
 /* ========================================= */
 /* Панель Компендиев                         */
 /* ========================================= */
-
 function CompendiumsPanel() {
   const [newCompendiumName, setNewCompendiumName] = useState('');
   const [newCompendiumType, setNewCompendiumType] = useState('monster');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
 
   const { data: activeCampaign } = useActiveCampaign();
   const { data: compendiums = [], isLoading } = useCompendiums(
@@ -26,6 +29,8 @@ function CompendiumsPanel() {
   );
 
   const createCompendium = useCreateCompendium();
+  const updateCompendium = useUpdateCompendium();
+  const deleteCompendium = useDeleteCompendium();
   const openCompendiumTab = useWorkspaceStore(
     (state) => state.openCompendiumTab,
   );
@@ -58,6 +63,43 @@ function CompendiumsPanel() {
         },
       },
     );
+  };
+
+  const startEditing = (id: string, currentName: string) => {
+    setEditingId(id);
+    setEditName(currentName);
+  };
+
+  const saveEditing = () => {
+    if (!editingId) return;
+
+    const name = editName.trim();
+    if (!name) return;
+
+    const compendium = compendiums.find((c) => c.id === editingId);
+    if (!compendium) return;
+
+    updateCompendium.mutate(
+      {
+        id: editingId,
+        name,
+        compendiumType: compendium.type,
+      },
+      {
+        onSuccess: () => {
+          setEditingId(null);
+          setEditName('');
+        },
+      },
+    );
+  };
+
+  const handleDelete = (id: string, name: string) => {
+    if (!window.confirm(`Delete compendium "${name}" and all its entries?`)) {
+      return;
+    }
+
+    deleteCompendium.mutate({ id });
   };
 
   return (
@@ -100,18 +142,74 @@ function CompendiumsPanel() {
         )}
 
         <ul className="navigator-list">
-          {compendiums.map((compendium) => (
-            <li key={compendium.id}>
-              <button
-                type="button"
-                className="navigator-item"
-                onClick={() => openCompendiumTab(compendium)}
-              >
-                <span>{compendium.name}</span>
-                <small>{compendium.type}</small>
-              </button>
-            </li>
-          ))}
+          {compendiums.map((compendium) => {
+            const isEditing = editingId === compendium.id;
+
+            return (
+              <li key={compendium.id}>
+                {isEditing ? (
+                  <div className="navigator-item-edit">
+                    <input
+                      value={editName}
+                      onChange={(event) => setEditName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') saveEditing();
+                        if (event.key === 'Escape') setEditingId(null);
+                      }}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={saveEditing}
+                      disabled={updateCompendium.isPending}
+                    >
+                      ✓
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingId(null)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : (
+                  <div className="navigator-item-row">
+                    <button
+                      type="button"
+                      className="navigator-item navigator-item-grow"
+                      onClick={() => openCompendiumTab(compendium)}
+                    >
+                      <span>{compendium.name}</span>
+                      <small>{compendium.type}</small>
+                    </button>
+
+                    <div className="navigator-item-actions">
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title="Rename"
+                        onClick={() =>
+                          startEditing(compendium.id, compendium.name)
+                        }
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-btn icon-btn-danger"
+                        title="Delete"
+                        onClick={() =>
+                          handleDelete(compendium.id, compendium.name)
+                        }
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </div>
     </div>

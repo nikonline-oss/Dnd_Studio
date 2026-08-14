@@ -612,3 +612,89 @@ export function useCreateCompendiumEntry() {
     },
   });
 }
+
+export function useUpdateCompendium() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      name,
+      compendiumType,
+    }: {
+      id: string;
+      name: string;
+      compendiumType: string;
+    }) => unwrap(commands.updateCompendium(id, name, compendiumType)),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['compendiums'] });
+    },
+
+    onError: (error) => {
+      logError('api', 'update compendium failed', error);
+    },
+  });
+}
+
+export function useDeleteCompendium() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id }: { id: string }) =>
+      unwrap(commands.deleteCompendium(id)),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['compendiums'] });
+    },
+
+    onError: (error) => {
+      logError('api', 'delete compendium failed', error);
+    },
+  });
+}
+
+export function useUpdateCompendiumEntry() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      name,
+      dataJson,
+    }: {
+      id: string;
+      name: string;
+      dataJson: string;
+    }) => unwrap(commands.updateCompendiumEntry(id, name, dataJson)),
+
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ['compendiumEntries', data.compendiumId],
+      });
+    },
+
+    onError: (error) => {
+      logError('api', 'update compendium entry failed', error);
+    },
+  });
+}
+
+export function useDeleteCompendiumEntry() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, compendiumId }: { id: string; compendiumId: string }) =>
+      unwrap(commands.deleteCompendiumEntry(id)),
+
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['compendiumEntries', variables.compendiumId],
+      });
+    },
+
+    onError: (error) => {
+      logError('api', 'delete compendium entry failed', error);
+    },
+  });
+}

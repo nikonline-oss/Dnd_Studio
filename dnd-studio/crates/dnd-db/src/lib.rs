@@ -966,6 +966,127 @@ impl CampaignDb {
             data_json: data_json.to_string(),
         })
     }
+
+    pub async fn update_compendium(
+        &self,
+        id: &str,
+        name: &str,
+        compendium_type: &str,
+    ) -> Result<CompendiumSummary, AppError> {
+        let name = name.trim().to_string();
+
+        if name.is_empty() {
+            return Err(AppError::Validation(
+                "Compendium name is required".to_string(),
+            ));
+        }
+
+        let result = sqlx::query(
+            r#"
+        UPDATE compendiums
+        SET name = ?, type = ?
+        WHERE id = ?
+        "#,
+        )
+        .bind(&name)
+        .bind(compendium_type)
+        .bind(id)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        Ok(CompendiumSummary {
+            id: id.to_string(),
+            name,
+            source_plugin_id: None,
+            r#type: compendium_type.to_string(),
+        })
+    }
+
+    pub async fn delete_compendium(&self, id: &str) -> Result<(), AppError> {
+        let result = sqlx::query("DELETE FROM compendiums WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        Ok(())
+    }
+
+    pub async fn update_compendium_entry(
+        &self,
+        id: &str,
+        name: &str,
+        data_json: &str,
+    ) -> Result<CompendiumEntrySummary, AppError> {
+        let name = name.trim().to_string();
+
+        if name.is_empty() {
+            return Err(AppError::Validation("Entry name is required".to_string()));
+        }
+
+        // Валидация JSON
+        serde_json::from_str::<serde_json::Value>(data_json)
+            .map_err(|_| AppError::Validation("data_json must be valid JSON".to_string()))?;
+
+        // Сначала получаем текущую запись, чтобы вернуть полные данные
+        let existing = sqlx::query_as::<_, (String, String, String, String, String)>(
+            r#"
+        SELECT id, compendium_id, entry_key, name, data_json
+        FROM compendium_entries
+        WHERE id = ?
+        "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(AppError::db)?
+        .ok_or(AppError::NotFound)?;
+
+        sqlx::query(
+            r#"
+        UPDATE compendium_entries
+        SET name = ?, data_json = ?
+        WHERE id = ?
+        "#,
+        )
+        .bind(&name)
+        .bind(data_json)
+        .bind(id)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(CompendiumEntrySummary {
+            id: existing.0,
+            compendium_id: existing.1,
+            entry_key: existing.2,
+            name,
+            data_json: data_json.to_string(),
+        })
+    }
+
+    pub async fn delete_compendium_entry(&self, id: &str) -> Result<(), AppError> {
+        let result = sqlx::query("DELETE FROM compendium_entries WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        Ok(())
+    }
 }
 
 async fn connect(path: &Path, create_if_missing: bool) -> Result<SqlitePool, AppError> {

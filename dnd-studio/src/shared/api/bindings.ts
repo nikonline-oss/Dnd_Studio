@@ -58,6 +58,10 @@ export const commands = {
 	listCompendiumEntries: (compendiumId: string) => typedError<CompendiumEntrySummary[], AppError>(__TAURI_INVOKE("list_compendium_entries", { compendiumId })),
 	createCompendium: (name: string, compendiumType: string) => typedError<CompendiumSummary, AppError>(__TAURI_INVOKE("create_compendium", { name, compendiumType })),
 	createCompendiumEntry: (compendiumId: string, entryKey: string, name: string, dataJson: string) => typedError<CompendiumEntrySummary, AppError>(__TAURI_INVOKE("create_compendium_entry", { compendiumId, entryKey, name, dataJson })),
+	updateCompendium: (id: string, name: string, compendiumType: string) => typedError<CompendiumSummary, AppError>(__TAURI_INVOKE("update_compendium", { id, name, compendiumType })),
+	deleteCompendium: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_compendium", { id })),
+	updateCompendiumEntry: (id: string, name: string, dataJson: string) => typedError<CompendiumEntrySummary, AppError>(__TAURI_INVOKE("update_compendium_entry", { id, name, dataJson })),
+	deleteCompendiumEntry: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_compendium_entry", { id })),
 };
 
 /* Types */

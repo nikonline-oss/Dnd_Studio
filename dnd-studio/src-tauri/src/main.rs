@@ -19,6 +19,7 @@ use commands::tokens::{
 };
 use commands::compendiums::{
     create_compendium, create_compendium_entry, list_compendium_entries, list_compendiums,
+    update_compendium, delete_compendium, update_compendium_entry, delete_compendium_entry
 };
 use specta_typescript::Typescript;
 use state::{AppPaths, AppState};
@@ -57,7 +58,11 @@ fn main() {
             list_compendiums,
             list_compendium_entries,
             create_compendium,
-            create_compendium_entry
+            create_compendium_entry,
+            update_compendium,
+            delete_compendium,
+            update_compendium_entry,
+            delete_compendium_entry
         ]);
 
     #[cfg(debug_assertions)]
