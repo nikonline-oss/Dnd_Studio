@@ -36,3 +36,5 @@ thiserror.workspace = true
 anyhow.workspace = true
 specta-typescript = "0.0.12"
 base64 = "0.22"
+zip = "2"
+chrono = "0.4.45"

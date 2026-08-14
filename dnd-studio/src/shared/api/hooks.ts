@@ -698,3 +698,33 @@ export function useDeleteCompendiumEntry() {
     },
   });
 }
+
+export function useExportCampaign() {
+  return useMutation({
+    mutationFn: (destinationPath: string) =>
+      unwrap(commands.exportCampaign(destinationPath)),
+
+    onError: (error) => {
+      logError('api', 'export campaign failed', error);
+    },
+  });
+}
+
+export function useImportCampaign() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (sourcePath: string) =>
+      unwrap(commands.importCampaign(sourcePath)),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['activeCampaign'] });
+      queryClient.invalidateQueries({ queryKey: ['maps'] });
+    },
+
+    onError: (error) => {
+      logError('api', 'import campaign failed', error);
+    },
+  });
+}

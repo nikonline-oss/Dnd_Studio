@@ -1,5 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { useCampaigns, useCreateCampaign, useOpenCampaign } from '../../shared/api/hooks';
+import { open } from '@tauri-apps/plugin-dialog';
+import { useImportCampaign } from '../../shared/api/hooks';
 
 export function StartScreen() {
   const [name, setName] = useState('');
@@ -7,6 +9,28 @@ export function StartScreen() {
   const { data: campaigns = [], isLoading } = useCampaigns();
   const createCampaign = useCreateCampaign();
   const openCampaign = useOpenCampaign();
+
+  const importCampaign = useImportCampaign();
+
+  const handleImport = async () => {
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [
+          {
+            name: 'DndStudio Campaign',
+            extensions: ['dndcampaign'],
+          },
+        ],
+      });
+
+      if (typeof selected === 'string') {
+        importCampaign.mutate(selected);
+      }
+    } catch (error) {
+      console.error('Import failed', error);
+    }
+  };
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -35,6 +59,16 @@ export function StartScreen() {
             {createCampaign.isPending ? 'Creating…' : 'Create campaign'}
           </button>
         </form>
+
+        <div className="start-import">
+          <button
+            type="button"
+            onClick={handleImport}
+            disabled={importCampaign.isPending}
+          >
+            {importCampaign.isPending ? 'Importing…' : 'Import campaign (.dndcampaign)'}
+          </button>
+        </div>
 
         {createCampaign.isError && (
           <div className="error-text">

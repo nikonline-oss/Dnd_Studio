@@ -21,6 +21,7 @@ use commands::compendiums::{
     create_compendium, create_compendium_entry, list_compendium_entries, list_compendiums,
     update_compendium, delete_compendium, update_compendium_entry, delete_compendium_entry
 };
+use commands::campaign_io::{export_campaign, import_campaign};
 use specta_typescript::Typescript;
 use state::{AppPaths, AppState};
 use tauri::Manager;
@@ -62,7 +63,9 @@ fn main() {
             update_compendium,
             delete_compendium,
             update_compendium_entry,
-            delete_compendium_entry
+            delete_compendium_entry,
+            export_campaign,
+            import_campaign
         ]);
 
     #[cfg(debug_assertions)]

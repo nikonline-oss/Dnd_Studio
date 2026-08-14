@@ -1,6 +1,8 @@
 import { useUiStore } from '../stores/ui';
 import { type ThemeMode } from '../theme/theme';
 import { useActiveCampaign, useCloseCampaign } from '../api/hooks';
+import { save } from '@tauri-apps/plugin-dialog';
+import { useExportCampaign } from '../api/hooks';
 
 const menuItems = ['File', 'Edit', 'View', 'Tools', 'Help'];
 
@@ -14,6 +16,30 @@ export function TopBar() {
 
   const { data: activeCampaign } = useActiveCampaign();
   const closeCampaign = useCloseCampaign();
+
+  const exportCampaign = useExportCampaign();
+
+  const handleExport = async () => {
+    if (!activeCampaign) return;
+
+    try {
+      const destination = await save({
+        defaultPath: `${activeCampaign.name.replace(/\s+/g, '-').toLowerCase()}.dndcampaign`,
+        filters: [
+          {
+            name: 'DndStudio Campaign',
+            extensions: ['dndcampaign'],
+          },
+        ],
+      });
+
+      if (typeof destination === 'string') {
+        exportCampaign.mutate(destination);
+      }
+    } catch (error) {
+      console.error('Export failed', error);
+    }
+  };
 
   return (
     <header className="topbar">
@@ -40,6 +66,13 @@ export function TopBar() {
               disabled={closeCampaign.isPending}
             >
               {closeCampaign.isPending ? 'Closing…' : 'Switch campaign'}
+            </button>
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exportCampaign.isPending}
+            >
+              {exportCampaign.isPending ? 'Exporting…' : 'Export'}
             </button>
           </div>
         ) : (

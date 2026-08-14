@@ -62,6 +62,10 @@ export const commands = {
 	deleteCompendium: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_compendium", { id })),
 	updateCompendiumEntry: (id: string, name: string, dataJson: string) => typedError<CompendiumEntrySummary, AppError>(__TAURI_INVOKE("update_compendium_entry", { id, name, dataJson })),
 	deleteCompendiumEntry: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_compendium_entry", { id })),
+	/**  Экспорт активной кампании в файл .dndcampaign (ZIP) */
+	exportCampaign: (destinationPath: string) => typedError<null, AppError>(__TAURI_INVOKE("export_campaign", { destinationPath })),
+	/**  Импорт кампании из файла .dndcampaign (ZIP) */
+	importCampaign: (sourcePath: string) => typedError<CampaignSummary, AppError>(__TAURI_INVOKE("import_campaign", { sourcePath })),
 };
 
 /* Types */
