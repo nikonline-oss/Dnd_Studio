@@ -1,6 +1,6 @@
 use dnd_core::{
     AppError, CampaignSummary, CharacterSummary, JournalEntryDetail, JournalEntrySummary,
-    MapSummary, TokenSummary,
+    MapSummary, TokenSummary, CharacterDetail
 };
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
@@ -634,6 +634,88 @@ impl CampaignDb {
         }
 
         Ok(())
+    }
+
+    pub async fn get_character(&self, id: &str) -> Result<Option<CharacterDetail>, AppError> {
+        let row = sqlx::query_as::<_, (String, String, String, String)>(
+            r#"
+        SELECT
+            id,
+            name,
+            type,
+            data_json
+        FROM characters
+        WHERE id = ?
+        "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(
+            row.map(|(id, name, character_type, data_json)| CharacterDetail {
+                id,
+                name,
+                character_type,
+                data_json,
+            }),
+        )
+    }
+
+    pub async fn update_character(
+        &self,
+        id: &str,
+        name: &str,
+        character_type: &str,
+        data_json: &str,
+    ) -> Result<CharacterDetail, AppError> {
+        let name = name.trim().to_string();
+
+        if name.is_empty() {
+            return Err(AppError::Validation(
+                "Character name is required".to_string(),
+            ));
+        }
+
+        if character_type != "pc" && character_type != "npc" && character_type != "monster" {
+            return Err(AppError::Validation(
+                "Character type must be pc, npc or monster".to_string(),
+            ));
+        }
+
+        let data_json = if data_json.trim().is_empty() {
+            "{}".to_string()
+        } else {
+            data_json.to_string()
+        };
+
+        serde_json::from_str::<serde_json::Value>(&data_json)
+            .map_err(|_| AppError::Validation("data_json must be valid JSON".to_string()))?;
+
+        let result = sqlx::query(
+            r#"
+        UPDATE characters
+        SET
+            name = ?,
+            type = ?,
+            data_json = ?
+        WHERE id = ?
+        "#,
+        )
+        .bind(&name)
+        .bind(character_type)
+        .bind(&data_json)
+        .bind(id)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        self.get_character(id).await?.ok_or(AppError::NotFound)
     }
 }
 

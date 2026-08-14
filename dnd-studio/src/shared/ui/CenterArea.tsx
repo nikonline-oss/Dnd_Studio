@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useActiveCampaign } from '../api/hooks';
 import { StartScreen } from '../../features/campaign-start/StartScreen';
 import { JournalTab } from '../../features/journal/JournalTab';
+import { CharacterTab } from '../../features/character/CharacterTab';
 import { MapTab } from '../../features/map/MapTab';
 import { logDebug } from '../lib/debug';
 import { useWorkspaceStore } from '../stores/workspace';
@@ -36,6 +37,10 @@ function ActiveTabContent() {
 
   if (activeTab.kind === 'journal') {
     return <JournalTab entryId={activeTab.entityId} />;
+  }
+
+  if (activeTab.kind === 'character') {
+    return <CharacterTab characterId={activeTab.entityId} />;
   }
 
   return (

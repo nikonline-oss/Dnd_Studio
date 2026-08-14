@@ -29,6 +29,10 @@ function NavigatorPanel() {
 
   const openMapTab = useWorkspaceStore((state) => state.openMapTab);
 
+  const openCharacterTab = useWorkspaceStore(
+    (state) => state.openCharacterTab,
+  );
+
   if (!activeCampaign) {
     return (
       <div className="empty-state">
@@ -127,10 +131,14 @@ function NavigatorPanel() {
         <ul className="navigator-list">
           {characters.map((character) => (
             <li key={character.id}>
-              <div className="navigator-item navigator-item-static">
+              <button
+                type="button"
+                className="navigator-item"
+                onClick={() => openCharacterTab(character)}
+              >
                 <span>{character.name}</span>
                 <small>{character.type.toUpperCase()}</small>
-              </div>
+              </button>
             </li>
           ))}
         </ul>

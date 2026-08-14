@@ -41,6 +41,8 @@ interface WorkspaceState {
     entityId: string,
     title: string,
   ) => void;
+
+  openCharacterTab: (character: { id: string; name: string }) => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>()(
@@ -229,6 +231,17 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             return tab;
           }),
         })),
+
+      openCharacterTab: (character) => {
+        logDebug('workspace', 'openCharacterTab', character);
+
+        get().openTab({
+          id: `character:${character.id}`,
+          kind: 'character',
+          title: character.name || 'Character',
+          entityId: character.id,
+        });
+      },
     }),
     {
       name: 'dndstudio.workspace',

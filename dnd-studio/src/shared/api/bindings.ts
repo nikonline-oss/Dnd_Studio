@@ -42,6 +42,13 @@ export const commands = {
 } | null, AppError>(__TAURI_INVOKE("get_journal_entry", { id })),
 	updateJournalEntry: (id: string, title: string, contentMarkdown: string, folderPath: string, isVisibleToPlayers: boolean) => typedError<JournalEntryDetail, AppError>(__TAURI_INVOKE("update_journal_entry", { id, title, contentMarkdown, folderPath, isVisibleToPlayers })),
 	deleteJournalEntry: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_journal_entry", { id })),
+	getCharacter: (id: string) => typedError<{
+	id: string,
+	name: string,
+	type: string,
+	dataJson: string,
+} | null, AppError>(__TAURI_INVOKE("get_character", { id })),
+	updateCharacter: (id: string, name: string, characterType: string, dataJson: string) => typedError<CharacterDetail, AppError>(__TAURI_INVOKE("update_character", { id, name, characterType, dataJson })),
 };
 
 /* Types */
@@ -60,6 +67,13 @@ export type CampaignSummary = {
 	fileName: string,
 	createdAt: number,
 	lastOpenedAt: number | null,
+};
+
+export type CharacterDetail = {
+	id: string,
+	name: string,
+	type: string,
+	dataJson: string,
 };
 
 export type CharacterSummary = {

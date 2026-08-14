@@ -13,7 +13,7 @@ use commands::tokens::{
     list_tokens,
     move_token,
 };
-use commands::characters::{create_character, list_characters};
+use commands::characters::{create_character, list_characters, get_character, update_character};
 use commands::journal::{
     create_journal_entry,
     delete_journal_entry,
@@ -48,7 +48,9 @@ fn main() {
         list_journal_entries,
         get_journal_entry,
         update_journal_entry,
-        delete_journal_entry
+        delete_journal_entry,
+        get_character,
+        update_character
     ]);
 
     #[cfg(debug_assertions)]

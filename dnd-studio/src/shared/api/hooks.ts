@@ -405,3 +405,46 @@ export function useDeleteJournalEntry() {
     },
   });
 }
+
+export function useCharacter(id?: string) {
+  return useQuery({
+    queryKey: ['character', id],
+    queryFn: () => unwrap(commands.getCharacter(id!)),
+    enabled: Boolean(id),
+    retry: false,
+  });
+}
+
+export function useUpdateCharacter() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      name,
+      characterType,
+      dataJson,
+    }: {
+      id: string;
+      name: string;
+      characterType: 'pc' | 'npc' | 'monster';
+      dataJson: string;
+    }) =>
+      unwrap(
+        commands.updateCharacter(id, name, characterType, dataJson),
+      ),
+
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['characters'] });
+      queryClient.invalidateQueries({
+        queryKey: ['character', variables.id],
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['tokens'] });
+    },
+
+    onError: (error) => {
+      logError('api', 'update character failed', error);
+    },
+  });
+}

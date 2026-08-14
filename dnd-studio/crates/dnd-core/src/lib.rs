@@ -74,6 +74,18 @@ pub struct JournalEntryDetail {
     pub is_visible_to_players: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CharacterDetail {
+    pub id: String,
+    pub name: String,
+
+    #[serde(rename = "type")]
+    pub character_type: String,
+
+    pub data_json: String,
+}
+
 #[derive(Debug, thiserror::Error, Serialize, specta::Type)]
 #[serde(tag = "kind", content = "message")]
 pub enum AppError {
