@@ -776,3 +776,21 @@ export function useSetPluginActive() {
     },
   });
 }
+
+export function useUninstallPlugin() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (pluginId: string) =>
+      unwrap(commands.uninstallPlugin(pluginId)),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plugins'] });
+      queryClient.invalidateQueries({ queryKey: ['compendiums'] });
+    },
+
+    onError: (error) => {
+      logError('api', 'uninstall plugin failed', error);
+    },
+  });
+}

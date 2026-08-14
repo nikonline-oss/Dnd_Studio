@@ -22,7 +22,7 @@ use commands::compendiums::{
     update_compendium, delete_compendium, update_compendium_entry, delete_compendium_entry
 };
 use commands::campaign_io::{export_campaign, import_campaign};
-use commands::plugins::{install_plugin_from_file, list_installed_plugins, set_plugin_active};
+use commands::plugins::{install_plugin_from_file, list_installed_plugins, set_plugin_active, uninstall_plugin};
 use specta_typescript::Typescript;
 use state::{AppPaths, AppState};
 use tauri::Manager;
@@ -69,7 +69,8 @@ fn main() {
             import_campaign,
             install_plugin_from_file,
             list_installed_plugins,
-            set_plugin_active
+            set_plugin_active,
+            uninstall_plugin
         ]);
 
     #[cfg(debug_assertions)]

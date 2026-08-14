@@ -1,7 +1,7 @@
 use dnd_core::{
     AppError, CampaignSummary, CharacterDetail, CharacterSummary, CompendiumEntrySummary,
     CompendiumSummary, InstalledPluginSummary, JournalEntryDetail, JournalEntrySummary, MapSummary,
-    PluginDependency, PluginManifest, TokenSummary,
+     TokenSummary,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
@@ -1210,6 +1210,103 @@ impl CampaignDb {
         self.get_installed_plugin(plugin_id)
             .await?
             .ok_or(AppError::NotFound)
+    }
+
+    /// Импорт компендия из плагина.
+    /// Создаёт компендий с source_plugin_id и импортирует записи.
+    pub async fn import_compendium_from_plugin(
+        &self,
+        plugin_id: &str,
+        compendium_key: &str,
+        name: &str,
+        compendium_type: &str,
+        entries: &[dnd_core::PluginCompendiumEntry],
+    ) -> Result<CompendiumSummary, AppError> {
+        let id = uuid::Uuid::new_v4().to_string();
+
+        sqlx::query(
+            r#"
+        DELETE FROM compendiums
+        WHERE source_plugin_id = ? AND id IN (
+            SELECT id FROM compendiums WHERE source_plugin_id = ?
+        )
+        "#,
+        )
+        .bind(plugin_id)
+        .bind(plugin_id)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        sqlx::query(
+            r#"
+        INSERT INTO compendiums (id, name, source_plugin_id, type)
+        VALUES (?, ?, ?, ?)
+        "#,
+        )
+        .bind(&id)
+        .bind(name)
+        .bind(plugin_id)
+        .bind(compendium_type)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        for entry in entries {
+            let entry_id = uuid::Uuid::new_v4().to_string();
+            let data_json = serde_json::to_string(&entry.data).unwrap_or_else(|_| "{}".to_string());
+
+            sqlx::query(
+                r#"
+            INSERT INTO compendium_entries (id, compendium_id, entry_key, name, data_json)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(compendium_id, entry_key) DO UPDATE SET
+                name = excluded.name,
+                data_json = excluded.data_json
+            "#,
+            )
+            .bind(&entry_id)
+            .bind(&id)
+            .bind(&entry.key)
+            .bind(&entry.name)
+            .bind(&data_json)
+            .execute(&self.pool)
+            .await
+            .map_err(AppError::db)?;
+        }
+
+        Ok(CompendiumSummary {
+            id,
+            name: name.to_string(),
+            source_plugin_id: Some(plugin_id.to_string()),
+            r#type: compendium_type.to_string(),
+        })
+    }
+
+    /// Удаляет все компендии, связанные с плагином.
+    pub async fn delete_compendiums_by_plugin(&self, plugin_id: &str) -> Result<u64, AppError> {
+        let result = sqlx::query("DELETE FROM compendiums WHERE source_plugin_id = ?")
+            .bind(plugin_id)
+            .execute(&self.pool)
+            .await
+            .map_err(AppError::db)?;
+
+        Ok(result.rows_affected())
+    }
+
+    /// Удаляет плагин из installed_plugins.
+    pub async fn delete_installed_plugin(&self, plugin_id: &str) -> Result<(), AppError> {
+        let result = sqlx::query("DELETE FROM installed_plugins WHERE plugin_id = ?")
+            .bind(plugin_id)
+            .execute(&self.pool)
+            .await
+            .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        Ok(())
     }
 }
 

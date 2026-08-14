@@ -69,6 +69,7 @@ export const commands = {
 	installPluginFromFile: (sourcePath: string) => typedError<InstalledPluginSummary, AppError>(__TAURI_INVOKE("install_plugin_from_file", { sourcePath })),
 	listInstalledPlugins: () => typedError<InstalledPluginSummary[], AppError>(__TAURI_INVOKE("list_installed_plugins")),
 	setPluginActive: (pluginId: string, isActive: boolean) => typedError<InstalledPluginSummary, AppError>(__TAURI_INVOKE("set_plugin_active", { pluginId, isActive })),
+	uninstallPlugin: (pluginId: string) => typedError<null, AppError>(__TAURI_INVOKE("uninstall_plugin", { pluginId })),
 };
 
 /* Types */

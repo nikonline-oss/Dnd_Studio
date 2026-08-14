@@ -12,6 +12,7 @@ import {
   useInstallPlugin,
   useMaps,
   useSetPluginActive,
+  useUninstallPlugin,
   useUpdateCompendium,
 } from '../api/hooks';
 import { useUiStore } from '../stores/ui';
@@ -33,6 +34,7 @@ function parsePluginManifest(rawJson: string): {
 
 function PluginsPanel() {
   const { data: activeCampaign } = useActiveCampaign();
+  const uninstallPlugin = useUninstallPlugin();
 
   const { data: plugins = [], isLoading } = useInstalledPlugins(
     Boolean(activeCampaign),
@@ -124,6 +126,23 @@ function PluginsPanel() {
                     )}
                   </div>
                 </label>
+
+                <div className="plugin-actions">
+                  <button
+                    type="button"
+                    className="icon-btn icon-btn-danger"
+                    title="Uninstall plugin"
+                    disabled={uninstallPlugin.isPending}
+                    onClick={() => {
+                      const name = manifest?.name ?? plugin.pluginId;
+                      if (window.confirm(`Uninstall plugin "${name}"? Its compendiums will be removed.`)) {
+                        uninstallPlugin.mutate(plugin.pluginId);
+                      }
+                    }}
+                  >
+                    🗑️
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -264,6 +283,7 @@ function CompendiumsPanel() {
         <ul className="navigator-list">
           {compendiums.map((compendium) => {
             const isEditing = editingId === compendium.id;
+            const isFromPlugin = Boolean(compendium.sourcePluginId);
 
             return (
               <li key={compendium.id}>
@@ -300,31 +320,36 @@ function CompendiumsPanel() {
                       onClick={() => openCompendiumTab(compendium)}
                     >
                       <span>{compendium.name}</span>
-                      <small>{compendium.type}</small>
+                      <small>
+                        {compendium.type}
+                        {isFromPlugin && ' 🔌'}
+                      </small>
                     </button>
 
-                    <div className="navigator-item-actions">
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title="Rename"
-                        onClick={() =>
-                          startEditing(compendium.id, compendium.name)
-                        }
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-btn icon-btn-danger"
-                        title="Delete"
-                        onClick={() =>
-                          handleDelete(compendium.id, compendium.name)
-                        }
-                      >
-                        🗑️
-                      </button>
-                    </div>
+                    {!isFromPlugin && (
+                      <div className="navigator-item-actions">
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="Rename"
+                          onClick={() =>
+                            startEditing(compendium.id, compendium.name)
+                          }
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-btn icon-btn-danger"
+                          title="Delete"
+                          onClick={() =>
+                            handleDelete(compendium.id, compendium.name)
+                          }
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </li>

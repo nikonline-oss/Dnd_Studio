@@ -116,9 +116,66 @@ pub struct InstalledPluginSummary {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginCompendiumEntry {
+    pub key: String,
+    pub name: String,
+
+    #[serde(default)]
+    pub data: serde_json::Value,
+}
+
+/// Файл компендия в плагине
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginCompendiumFile {
+    #[serde(default)]
+    pub entries: Vec<PluginCompendiumEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginDependency {
     pub id: String,
     pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginCompendiumRef {
+    pub key: String,
+    pub file: String,
+
+    #[serde(rename = "type")]
+    pub compendium_type: String,
+
+    #[serde(default)]
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginSheetRef {
+    pub key: String,
+    pub file: String,
+
+    #[serde(default)]
+    pub label: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginThemeRef {
+    pub key: String,
+    pub file: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginLinkTypeRef {
+    pub key: String,
+
+    #[serde(default)]
+    pub label: Option<String>,
+
+    #[serde(default)]
+    pub directed: bool,
+
+    #[serde(default)]
+    pub color: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,16 +197,16 @@ pub struct PluginManifest {
     pub dependencies: Vec<PluginDependency>,
 
     #[serde(default)]
-    pub sheets: Vec<serde_json::Value>,
+    pub sheets: Vec<PluginSheetRef>,
 
     #[serde(default)]
-    pub compendiums: Vec<serde_json::Value>,
+    pub compendiums: Vec<PluginCompendiumRef>,
 
     #[serde(default)]
-    pub themes: Vec<serde_json::Value>,
+    pub themes: Vec<PluginThemeRef>,
 
     #[serde(default)]
-    pub link_types: Vec<serde_json::Value>,
+    pub link_types: Vec<PluginLinkTypeRef>,
 }
 
 #[derive(Debug, thiserror::Error, Serialize, specta::Type)]

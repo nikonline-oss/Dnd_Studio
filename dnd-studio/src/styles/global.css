@@ -1884,11 +1884,9 @@ select:focus-visible {
   padding: 8px;
 
   background:
-    linear-gradient(
-      180deg,
+    linear-gradient(180deg,
       var(--surface-sheen),
-      transparent 30%
-    ),
+      transparent 30%),
     var(--panel-2);
 }
 
@@ -1922,4 +1920,11 @@ select:focus-visible {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.4;
+}
+
+.plugin-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  justify-content: flex-end;
 }

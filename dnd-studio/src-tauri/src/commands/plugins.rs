@@ -1,8 +1,14 @@
 use crate::commands::require_db;
 use crate::state::{AppPaths, AppState};
-use dnd_core::{AppError, InstalledPluginSummary, PluginManifest};
+use dnd_core::{
+    AppError,
+    InstalledPluginSummary,
+    PluginCompendiumFile,
+    PluginManifest,
+};
 use std::fs;
 use std::io::Read;
+use std::path::Path;
 use tauri::State;
 use zip::ZipArchive;
 
@@ -42,6 +48,72 @@ fn validate_plugin_version(version: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Читает и парсит файл компендия (JSON или YAML) из папки плагина.
+fn read_compendium_file(
+    plugin_root: &Path,
+    relative_path: &str,
+) -> Result<PluginCompendiumFile, AppError> {
+    let file_path = plugin_root.join(relative_path);
+
+    if !file_path.exists() {
+        return Err(AppError::Validation(format!(
+            "Compendium file not found: {}",
+            relative_path
+        )));
+    }
+
+    let content = fs::read_to_string(&file_path).map_err(AppError::io)?;
+
+    let extension = file_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .unwrap_or_default();
+
+    match extension.as_str() {
+        "json" => {
+            serde_json::from_str::<PluginCompendiumFile>(&content)
+                .map_err(|e| AppError::Validation(format!("Invalid compendium JSON: {e}")))
+        }
+        "yaml" | "yml" => {
+            serde_yaml::from_str::<PluginCompendiumFile>(&content)
+                .map_err(|e| AppError::Validation(format!("Invalid compendium YAML: {e}")))
+        }
+        _ => Err(AppError::Validation(format!(
+            "Unsupported compendium file extension: {}",
+            extension
+        ))),
+    }
+}
+
+/// Импортирует компендии плагина в БД кампании.
+async fn import_plugin_compendiums(
+    db: &dnd_db::CampaignDb,
+    plugin_root: &Path,
+    manifest: &PluginManifest,
+) -> Result<(), AppError> {
+    for compendium_ref in &manifest.compendiums {
+        let compendium_file =
+            read_compendium_file(plugin_root, &compendium_ref.file)?;
+
+        let name = compendium_ref
+            .name
+            .clone()
+            .unwrap_or_else(|| compendium_ref.key.clone());
+
+        db.import_compendium_from_plugin(
+            &manifest.id,
+            &compendium_ref.key,
+            &name,
+            &compendium_ref.compendium_type,
+            &compendium_file.entries,
+        )
+        .await?;
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn install_plugin_from_file(
@@ -51,7 +123,7 @@ pub async fn install_plugin_from_file(
 ) -> Result<InstalledPluginSummary, AppError> {
     let db = require_db(&state.campaign).await?;
 
-    let source = std::path::Path::new(&source_path);
+    let source = Path::new(&source_path);
 
     if !source.exists() {
         return Err(AppError::Validation("Plugin file not found".to_string()));
@@ -84,8 +156,7 @@ pub async fn install_plugin_from_file(
     let manifest_json =
         serde_json::to_string(&manifest).map_err(AppError::io)?;
 
-    // Распаковываем плагин в:
-    // {app_data}/plugins/{plugin_id}/{version}/
+    // Распаковываем плагин
     let plugin_root = paths
         .data_dir
         .join("plugins")
@@ -124,7 +195,10 @@ pub async fn install_plugin_from_file(
         fs::write(&destination, &bytes).map_err(AppError::io)?;
     }
 
-    // Сохраняем в installed_plugins текущей кампании
+    // Импортируем компендии из плагина
+    import_plugin_compendiums(&db, &plugin_root, &manifest).await?;
+
+    // Сохраняем в installed_plugins
     db.upsert_installed_plugin(
         &manifest.id,
         &manifest.version,
@@ -144,7 +218,6 @@ pub async fn list_installed_plugins(
     state: State<'_, AppState>,
 ) -> Result<Vec<InstalledPluginSummary>, AppError> {
     let db = require_db(&state.campaign).await?;
-
     db.list_installed_plugins().await
 }
 
@@ -156,6 +229,35 @@ pub async fn set_plugin_active(
     is_active: bool,
 ) -> Result<InstalledPluginSummary, AppError> {
     let db = require_db(&state.campaign).await?;
-
     db.set_plugin_active(&plugin_id, is_active).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn uninstall_plugin(
+    state: State<'_, AppState>,
+    paths: State<'_, AppPaths>,
+    plugin_id: String,
+) -> Result<(), AppError> {
+    let db = require_db(&state.campaign).await?;
+
+    // Получаем плагин для определения версии
+    let plugin = db
+        .get_installed_plugin(&plugin_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    // Удаляем компендии плагина
+    db.delete_compendiums_by_plugin(&plugin_id).await?;
+
+    // Удаляем из installed_plugins
+    db.delete_installed_plugin(&plugin_id).await?;
+
+    // Удаляем файлы плагина
+    let plugin_dir = paths.data_dir.join("plugins").join(&plugin_id);
+    if plugin_dir.exists() {
+        fs::remove_dir_all(&plugin_dir).map_err(AppError::io)?;
+    }
+
+    Ok(())
 }
