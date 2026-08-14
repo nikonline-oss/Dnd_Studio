@@ -25,10 +25,12 @@ export const commands = {
 	width: number,
 	height: number,
 } | null, AppError>(__TAURI_INVOKE("get_map", { id })),
-	createToken: (mapId: string, x: number | null, y: number | null) => typedError<TokenSummary, AppError>(__TAURI_INVOKE("create_token", { mapId, x, y })),
+	createToken: (mapId: string, x: number | null, y: number | null, characterId: string | null) => typedError<TokenSummary, AppError>(__TAURI_INVOKE("create_token", { mapId, x, y, characterId })),
 	listTokens: (mapId: string) => typedError<TokenSummary[], AppError>(__TAURI_INVOKE("list_tokens", { mapId })),
 	moveToken: (tokenId: string, x: number | null, y: number | null) => typedError<TokenSummary, AppError>(__TAURI_INVOKE("move_token", { tokenId, x, y })),
 	deleteToken: (tokenId: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_token", { tokenId })),
+	createCharacter: (name: string, characterType: string) => typedError<CharacterSummary, AppError>(__TAURI_INVOKE("create_character", { name, characterType })),
+	listCharacters: () => typedError<CharacterSummary[], AppError>(__TAURI_INVOKE("list_characters")),
 };
 
 /* Types */
@@ -49,6 +51,12 @@ export type CampaignSummary = {
 	lastOpenedAt: number | null,
 };
 
+export type CharacterSummary = {
+	id: string,
+	name: string,
+	type: string,
+};
+
 export type MapSummary = {
 	id: string,
 	worldId: string,
@@ -63,6 +71,7 @@ export type TokenSummary = {
 	id: string,
 	mapId: string,
 	characterId: string | null,
+	characterName: string | null,
 	x: number | null,
 	y: number | null,
 	rotation: number | null,

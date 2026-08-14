@@ -121,6 +121,7 @@ type CreateTokenVars = {
   mapId: string;
   x: number;
   y: number;
+  characterId?: string | null;
 };
 
 type MoveTokenVars = {
@@ -138,13 +139,12 @@ type DeleteTokenVars = {
 type TokenMutationContext = {
   previous?: TokenSummary[];
 };
-
 export function useCreateToken() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ mapId, x, y }: CreateTokenVars) =>
-      unwrap(commands.createToken(mapId, x, y)),
+    mutationFn: ({ mapId, x, y, characterId }: CreateTokenVars) =>
+      unwrap(commands.createToken(mapId, x, y, characterId ?? null)),
 
     onSuccess: (data, variables) => {
       queryClient.setQueryData<TokenSummary[]>(
@@ -164,7 +164,6 @@ export function useCreateToken() {
     },
   });
 }
-
 export function useMoveToken() {
   const queryClient = useQueryClient();
 
@@ -269,6 +268,37 @@ export function useDeleteToken() {
       queryClient.invalidateQueries({
         queryKey: ['tokens', variables.mapId],
       });
+    },
+  });
+}
+
+export function useCharacters(enabled: boolean = true) {
+  return useQuery({
+    queryKey: ['characters'],
+    queryFn: () => unwrap(commands.listCharacters()),
+    enabled,
+    retry: false,
+  });
+}
+
+export function useCreateCharacter() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      name,
+      characterType,
+    }: {
+      name: string;
+      characterType: 'pc' | 'npc' | 'monster';
+    }) => unwrap(commands.createCharacter(name, characterType)),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['characters'] });
+    },
+
+    onError: (error) => {
+      logError('api', 'create character failed', error);
     },
   });
 }

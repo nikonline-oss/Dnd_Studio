@@ -1,6 +1,7 @@
 pub mod campaign;
 pub mod tokens;
 pub mod maps;
+pub mod characters;
 
 use dnd_core::AppError;
 use dnd_db::CampaignDb;

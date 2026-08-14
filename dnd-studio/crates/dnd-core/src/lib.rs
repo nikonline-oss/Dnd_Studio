@@ -38,10 +38,21 @@ pub struct TokenSummary {
     pub id: String,
     pub map_id: String,
     pub character_id: Option<String>,
+    pub character_name: Option<String>,
     pub x: f64,
     pub y: f64,
     pub rotation: f64,
     pub is_visible: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CharacterSummary {
+    pub id: String,
+    pub name: String,
+
+    #[serde(rename = "type")]
+    pub character_type: String,
 }
 
 #[derive(Debug, thiserror::Error, Serialize, specta::Type)]

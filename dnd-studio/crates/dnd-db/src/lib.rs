@@ -1,4 +1,4 @@
-use dnd_core::{AppError, CampaignSummary, MapSummary, TokenSummary};
+use dnd_core::{AppError, CampaignSummary, CharacterSummary, MapSummary, TokenSummary};
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::SqlitePool;
@@ -237,6 +237,7 @@ impl CampaignDb {
         map_id: &str,
         x: f64,
         y: f64,
+        character_id: Option<String>,
     ) -> Result<TokenSummary, AppError> {
         let id = uuid::Uuid::new_v4().to_string();
 
@@ -251,11 +252,12 @@ impl CampaignDb {
             rotation,
             is_visible
         )
-        VALUES (?, ?, NULL, ?, ?, 0, 1)
+        VALUES (?, ?, ?, ?, ?, 0, 1)
         "#,
         )
         .bind(&id)
         .bind(map_id)
+        .bind(&character_id)
         .bind(x)
         .bind(y)
         .execute(&self.pool)
@@ -265,28 +267,43 @@ impl CampaignDb {
         Ok(TokenSummary {
             id,
             map_id: map_id.to_string(),
-            character_id: None,
+            character_id,
             x,
             y,
             rotation: 0.0,
             is_visible: true,
+            character_name: None,
         })
     }
 
     pub async fn list_tokens(&self, map_id: &str) -> Result<Vec<TokenSummary>, AppError> {
-        let rows = sqlx::query_as::<_, (String, String, Option<String>, f64, f64, f64, i32)>(
+        let rows = sqlx::query_as::<
+            _,
+            (
+                String,
+                String,
+                Option<String>,
+                f64,
+                f64,
+                f64,
+                i32,
+                Option<String>,
+            ),
+        >(
             r#"
         SELECT
-            id,
-            map_id,
-            character_id,
-            x,
-            y,
-            rotation,
-            is_visible
-        FROM tokens
-        WHERE map_id = ?
-        ORDER BY rowid
+            t.id,
+            t.map_id,
+            t.character_id,
+            t.x,
+            t.y,
+            t.rotation,
+            t.is_visible,
+            c.name
+        FROM tokens t
+        LEFT JOIN characters c ON c.id = t.character_id
+        WHERE t.map_id = ?
+        ORDER BY t.rowid
         "#,
         )
         .bind(map_id)
@@ -339,18 +356,32 @@ impl CampaignDb {
     }
 
     async fn fetch_token(&self, token_id: &str) -> Result<TokenSummary, AppError> {
-        let row = sqlx::query_as::<_, (String, String, Option<String>, f64, f64, f64, i32)>(
+        let row = sqlx::query_as::<
+            _,
+            (
+                String,
+                String,
+                Option<String>,
+                f64,
+                f64,
+                f64,
+                i32,
+                Option<String>,
+            ),
+        >(
             r#"
         SELECT
-            id,
-            map_id,
-            character_id,
-            x,
-            y,
-            rotation,
-            is_visible
-        FROM tokens
-        WHERE id = ?
+            t.id,
+            t.map_id,
+            t.character_id,
+            t.x,
+            t.y,
+            t.rotation,
+            t.is_visible,
+            c.name
+        FROM tokens t
+        LEFT JOIN characters c ON c.id = t.character_id
+        WHERE t.id = ?
         "#,
         )
         .bind(token_id)
@@ -360,6 +391,78 @@ impl CampaignDb {
         .ok_or(AppError::NotFound)?;
 
         Ok(row_to_token(row))
+    }
+
+    pub async fn create_character(
+        &self,
+        name: &str,
+        character_type: &str,
+    ) -> Result<CharacterSummary, AppError> {
+        let name = name.trim().to_string();
+
+        if name.is_empty() {
+            return Err(AppError::Validation(
+                "Character name is required".to_string(),
+            ));
+        }
+
+        if character_type != "pc" && character_type != "npc" && character_type != "monster" {
+            return Err(AppError::Validation(
+                "Character type must be pc, npc or monster".to_string(),
+            ));
+        }
+
+        let id = uuid::Uuid::new_v4().to_string();
+
+        sqlx::query(
+            r#"
+        INSERT INTO characters (
+            id,
+            name,
+            type,
+            data_json
+        )
+        VALUES (?, ?, ?, ?)
+        "#,
+        )
+        .bind(&id)
+        .bind(&name)
+        .bind(character_type)
+        .bind("{}")
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(CharacterSummary {
+            id,
+            name,
+            character_type: character_type.to_string(),
+        })
+    }
+
+    pub async fn list_characters(&self) -> Result<Vec<CharacterSummary>, AppError> {
+        let rows = sqlx::query_as::<_, (String, String, String)>(
+            r#"
+        SELECT
+            id,
+            name,
+            type
+        FROM characters
+        ORDER BY name
+        "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(id, name, character_type)| CharacterSummary {
+                id,
+                name,
+                character_type,
+            })
+            .collect())
     }
 }
 
@@ -388,9 +491,18 @@ async fn connect(path: &Path, create_if_missing: bool) -> Result<SqlitePool, App
 }
 
 fn row_to_token(
-    row: (String, String, Option<String>, f64, f64, f64, i32),
+    row: (
+        String,
+        String,
+        Option<String>,
+        f64,
+        f64,
+        f64,
+        i32,
+        Option<String>,
+    ),
 ) -> TokenSummary {
-    let (id, map_id, character_id, x, y, rotation, is_visible) = row;
+    let (id, map_id, character_id, x, y, rotation, is_visible, character_name) = row;
 
     TokenSummary {
         id,
@@ -400,6 +512,7 @@ fn row_to_token(
         y,
         rotation,
         is_visible: is_visible != 0,
+        character_name,
     }
 }
 

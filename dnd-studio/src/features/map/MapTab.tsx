@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import {
+  useCharacters,
   useCreateToken,
   useDeleteToken,
   useMap,
@@ -13,6 +14,7 @@ import { MapCanvas } from './MapCanvas';
 export function MapTab({ mapId }: { mapId?: string }) {
   const { data: map, isLoading } = useMap(mapId);
   const { data: tokens = [] } = useTokens(mapId);
+  const { data: characters = [] } = useCharacters(Boolean(mapId));
 
   const createToken = useCreateToken();
   const moveToken = useMoveToken();
@@ -20,6 +22,7 @@ export function MapTab({ mapId }: { mapId?: string }) {
 
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [pendingDeleteTokenIds, setPendingDeleteTokenIds] = useState<string[]>([]);
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string>('');
 
   if (!mapId) {
     return (
@@ -58,6 +61,7 @@ export function MapTab({ mapId }: { mapId?: string }) {
         mapId: map.id,
         x: map.width / 2 + jitterX,
         y: map.height / 2 + jitterY,
+        characterId: selectedCharacterId || null,
       },
       {
         onSuccess: (data) => {
@@ -77,9 +81,7 @@ export function MapTab({ mapId }: { mapId?: string }) {
     setSelectedTokenId(null);
 
     setPendingDeleteTokenIds((prev) =>
-      prev.includes(tokenId)
-        ? prev
-        : [...prev, tokenId],
+      prev.includes(tokenId) ? prev : [...prev, tokenId],
     );
 
     deleteToken.mutate(
@@ -111,7 +113,6 @@ export function MapTab({ mapId }: { mapId?: string }) {
       });
     } catch {
       // Rollback уже есть в useMoveToken.
-      // Здесь просто не даём promise упасть в MapCanvas.
     }
   };
 
@@ -121,6 +122,20 @@ export function MapTab({ mapId }: { mapId?: string }) {
         <span>{map.name}</span>
 
         <div className="map-tab-actions">
+          <select
+            value={selectedCharacterId}
+            onChange={(event) => setSelectedCharacterId(event.target.value)}
+            title="Character for new token"
+          >
+            <option value="">No character</option>
+
+            {characters.map((character) => (
+              <option key={character.id} value={character.id}>
+                {character.name} ({character.type.toUpperCase()})
+              </option>
+            ))}
+          </select>
+
           <button
             type="button"
             onClick={handleAddToken}

@@ -78,6 +78,18 @@ function tokenColor(tokenId: string): string {
     return `hsl(${hue}, 70%, 52%)`;
 }
 
+function characterInitials(name: string): string {
+    const parts = name.trim().split(/\s+/);
+
+    if (parts.length >= 2) {
+        return (
+            (parts[0][0] ?? '') + (parts[1][0] ?? '')
+        ).toUpperCase();
+    }
+
+    return name.slice(0, 2).toUpperCase();
+}
+
 export function MapCanvas({
     map,
     tokens = [],
@@ -413,7 +425,11 @@ export function MapCanvas({
         const labelByTokenId = new Map<string, string>();
 
         tokens.forEach((token, index) => {
-            labelByTokenId.set(token.id, String(index + 1));
+            const label = token.characterName
+                ? characterInitials(token.characterName)
+                : String(index + 1);
+
+            labelByTokenId.set(token.id, label);
         });
 
         const normalTokens = tokens.filter(

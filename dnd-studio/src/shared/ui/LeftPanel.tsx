@@ -2,6 +2,8 @@ import { FormEvent, useState } from 'react';
 
 import {
   useActiveCampaign,
+  useCharacters,
+  useCreateCharacter,
   useCreateMap,
   useMaps,
 } from '../api/hooks';
@@ -10,11 +12,21 @@ import { useWorkspaceStore } from '../stores/workspace';
 
 function NavigatorPanel() {
   const [newMapName, setNewMapName] = useState('');
+  const [newCharacterName, setNewCharacterName] = useState('');
+  const [newCharacterType, setNewCharacterType] = useState<'pc' | 'npc' | 'monster'>('pc');
 
   const { data: activeCampaign } = useActiveCampaign();
-  const { data: maps = [], isLoading } = useMaps(Boolean(activeCampaign));
+
+  const { data: maps = [], isLoading: areMapsLoading } = useMaps(
+    Boolean(activeCampaign),
+  );
+
+  const { data: characters = [], isLoading: areCharactersLoading } =
+    useCharacters(Boolean(activeCampaign));
 
   const createMap = useCreateMap();
+  const createCharacter = useCreateCharacter();
+
   const openMapTab = useWorkspaceStore((state) => state.openMapTab);
 
   if (!activeCampaign) {
@@ -49,8 +61,81 @@ function NavigatorPanel() {
     );
   };
 
+  const onCreateCharacter = (event: FormEvent) => {
+    event.preventDefault();
+
+    const name = newCharacterName.trim();
+
+    if (!name) {
+      return;
+    }
+
+    createCharacter.mutate(
+      {
+        name,
+        characterType: newCharacterType,
+      },
+      {
+        onSuccess: () => {
+          setNewCharacterName('');
+        },
+      },
+    );
+  };
+
   return (
     <div className="navigator">
+      <div className="navigator-section">
+        <div className="navigator-section-title">Characters</div>
+
+        <form className="navigator-form" onSubmit={onCreateCharacter}>
+          <input
+            value={newCharacterName}
+            onChange={(event) => setNewCharacterName(event.target.value)}
+            placeholder="Character name"
+          />
+
+          <select
+            value={newCharacterType}
+            onChange={(event) =>
+              setNewCharacterType(
+                event.target.value as 'pc' | 'npc' | 'monster',
+              )
+            }
+          >
+            <option value="pc">PC</option>
+            <option value="npc">NPC</option>
+            <option value="monster">Monster</option>
+          </select>
+
+          <button
+            type="submit"
+            disabled={!newCharacterName.trim() || createCharacter.isPending}
+          >
+            {createCharacter.isPending ? '…' : 'Add'}
+          </button>
+        </form>
+
+        {areCharactersLoading && (
+          <div className="empty-state">Loading characters…</div>
+        )}
+
+        {!areCharactersLoading && characters.length === 0 && (
+          <div className="empty-state">No characters yet.</div>
+        )}
+
+        <ul className="navigator-list">
+          {characters.map((character) => (
+            <li key={character.id}>
+              <div className="navigator-item navigator-item-static">
+                <span>{character.name}</span>
+                <small>{character.type.toUpperCase()}</small>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+
       <div className="navigator-section">
         <div className="navigator-section-title">Maps</div>
 
@@ -69,11 +154,11 @@ function NavigatorPanel() {
           </button>
         </form>
 
-        {isLoading && (
+        {areMapsLoading && (
           <div className="empty-state">Loading maps…</div>
         )}
 
-        {!isLoading && maps.length === 0 && (
+        {!areMapsLoading && maps.length === 0 && (
           <div className="empty-state">No maps yet.</div>
         )}
 

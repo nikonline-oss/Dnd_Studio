@@ -10,10 +10,11 @@ pub async fn create_token(
     map_id: String,
     x: f64,
     y: f64,
+    character_id: Option<String>,
 ) -> Result<TokenSummary, AppError> {
     let db = require_db(&state.campaign).await?;
 
-    db.create_token(&map_id, x, y).await
+    db.create_token(&map_id, x, y, character_id).await
 }
 
 #[tauri::command]
