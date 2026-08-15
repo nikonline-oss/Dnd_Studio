@@ -2,19 +2,26 @@ import { useEffect } from 'react';
 
 import { AppShell } from './AppShell';
 
-import { logDebug } from '../shared/lib/debug';
 import { useAutoOpenLastCampaign } from '../shared/hooks/useAutoOpenLastCampaign';
 import { useGlobalShortcuts } from '../shared/hooks/useGlobalShortcuts';
+import { usePluginDragDrop } from '../shared/hooks/usePluginDragDrop';
 import { useThemeEffect } from '../shared/hooks/useThemeEffect';
-import { useWorkspaceHydration } from '../shared/hooks/useWorkspaceHydration';
+import { logDebug } from '../shared/lib/debug';
 import { useWorkspaceStore } from '../shared/stores/workspace';
 
 export default function App() {
-  const workspaceReady = useWorkspaceHydration();
+  const workspaceReady = useWorkspaceStore.persist.hasHydrated();
 
   useThemeEffect();
   useGlobalShortcuts();
   useAutoOpenLastCampaign(workspaceReady);
+
+  const {
+    isDragging,
+    isInstalling,
+    dropMessage,
+    canInstall,
+  } = usePluginDragDrop();
 
   useEffect(() => {
     if (!workspaceReady) {
@@ -60,5 +67,25 @@ export default function App() {
     );
   }
 
-  return <AppShell />;
+  return (
+    <>
+      <AppShell />
+
+      {isDragging && (
+        <div className="plugin-drop-overlay">
+          <div className="plugin-drop-card">
+            {canInstall
+              ? 'Drop .dndplugin to install'
+              : 'Open a campaign before installing plugins'}
+          </div>
+        </div>
+      )}
+
+      {dropMessage && (
+        <div className="plugin-drop-toast">
+          {dropMessage}
+        </div>
+      )}
+    </>
+  );
 }

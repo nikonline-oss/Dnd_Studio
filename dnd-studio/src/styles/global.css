@@ -1997,3 +1997,57 @@ select:focus-visible {
   font-size: 12px;
   grid-column: 1 / -1;
 }
+
+/* Plugin drag-and-drop */
+
+.plugin-drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: rgba(8, 10, 16, 0.6);
+  backdrop-filter: blur(3px);
+}
+
+.plugin-drop-card {
+  padding: 20px 28px;
+
+  border: 2px dashed var(--border-gold-strong);
+  border-radius: 12px;
+
+  background:
+    linear-gradient(180deg,
+      var(--surface-sheen),
+      transparent 30%),
+    var(--panel-overlay);
+
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+
+  box-shadow:
+    0 24px 60px var(--shadow),
+    0 0 0 1px var(--gold-softer);
+}
+
+.plugin-drop-toast {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  z-index: 1001;
+
+  padding: 10px 14px;
+
+  border: 1px solid var(--border-gold-strong);
+  border-radius: 8px;
+
+  background: var(--panel-overlay);
+  color: var(--text);
+  font-size: 13px;
+
+  box-shadow: 0 12px 30px var(--shadow);
+}
