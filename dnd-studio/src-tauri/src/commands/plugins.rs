@@ -5,6 +5,7 @@ use dnd_core::{
     InstalledPluginSummary,
     PluginCompendiumFile,
     PluginManifest,
+    PluginSheetInfo
 };
 use std::fs;
 use std::io::Read;
@@ -261,3 +262,101 @@ pub async fn uninstall_plugin(
 
     Ok(())
 }
+
+/// Возвращает список всех декларативных листов из активных плагинов.
+#[tauri::command]
+#[specta::specta]
+pub async fn list_plugin_sheets(
+    state: State<'_, AppState>,
+    paths: State<'_, AppPaths>,
+) -> Result<Vec<PluginSheetInfo>, AppError> {
+    let db = require_db(&state.campaign).await?;
+
+    let plugins = db.list_installed_plugins().await?;
+
+    let mut sheets: Vec<PluginSheetInfo> = Vec::new();
+
+    for plugin in plugins {
+        if !plugin.is_active {
+            continue;
+        }
+
+        // Парсим манифест для получения sheets
+        let manifest: PluginManifest =
+            serde_json::from_str(&plugin.manifest_json).map_err(AppError::io)?;
+
+        let plugin_root = paths
+            .data_dir
+            .join("plugins")
+            .join(&plugin.plugin_id)
+            .join(&plugin.version);
+
+        for sheet_ref in &manifest.sheets {
+            let file_path = plugin_root.join(&sheet_ref.file);
+
+            if !file_path.exists() {
+                continue;
+            }
+
+            let name = sheet_ref
+                .label
+                .clone()
+                .unwrap_or_else(|| sheet_ref.key.clone());
+
+            sheets.push(PluginSheetInfo {
+                plugin_id: plugin.plugin_id.clone(),
+                sheet_key: sheet_ref.key.clone(),
+                name,
+                file_path: sheet_ref.file.clone(),
+            });
+        }
+    }
+
+    Ok(sheets)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_plugin_sheet(
+    state: State<'_, AppState>,
+    paths: State<'_, AppPaths>,
+    plugin_id: String,
+    sheet_key: String,
+) -> Result<String, AppError> {
+    let db = require_db(&state.campaign).await?;
+
+    let plugin = db
+        .get_installed_plugin(&plugin_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    let manifest: PluginManifest =
+        serde_json::from_str(&plugin.manifest_json).map_err(AppError::io)?;
+
+    let sheet_ref = manifest
+        .sheets
+        .iter()
+        .find(|s| s.key == sheet_key)
+        .ok_or(AppError::NotFound)?;
+
+    let plugin_root = paths
+        .data_dir
+        .join("plugins")
+        .join(&plugin_id)
+        .join(&plugin.version);
+
+    let file_path = plugin_root.join(&sheet_ref.file);
+
+    if !file_path.exists() {
+        return Err(AppError::NotFound);
+    }
+
+    let content = fs::read_to_string(&file_path).map_err(AppError::io)?;
+
+    serde_json::from_str::<serde_json::Value>(&content)
+        .map_err(|e| AppError::Validation(format!("Invalid sheet JSON: {e}")))?;
+
+    Ok(content)
+}
+
+

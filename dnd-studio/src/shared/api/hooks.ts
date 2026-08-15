@@ -794,3 +794,21 @@ export function useUninstallPlugin() {
     },
   });
 }
+
+export function usePluginSheets(enabled: boolean = true) {
+  return useQuery({
+    queryKey: ['pluginSheets'],
+    queryFn: () => unwrap(commands.listPluginSheets()),
+    enabled,
+    retry: false,
+  });
+}
+
+export function usePluginSheet(pluginId?: string, sheetKey?: string) {
+  return useQuery({
+    queryKey: ['pluginSheet', pluginId, sheetKey],
+    queryFn: () => unwrap(commands.getPluginSheet(pluginId!, sheetKey!)),
+    enabled: Boolean(pluginId && sheetKey),
+    retry: false,
+  });
+}

@@ -70,6 +70,9 @@ export const commands = {
 	listInstalledPlugins: () => typedError<InstalledPluginSummary[], AppError>(__TAURI_INVOKE("list_installed_plugins")),
 	setPluginActive: (pluginId: string, isActive: boolean) => typedError<InstalledPluginSummary, AppError>(__TAURI_INVOKE("set_plugin_active", { pluginId, isActive })),
 	uninstallPlugin: (pluginId: string) => typedError<null, AppError>(__TAURI_INVOKE("uninstall_plugin", { pluginId })),
+	getPluginSheet: (pluginId: string, sheetKey: string) => typedError<string, AppError>(__TAURI_INVOKE("get_plugin_sheet", { pluginId, sheetKey })),
+	/**  Возвращает список всех декларативных листов из активных плагинов. */
+	listPluginSheets: () => typedError<PluginSheetInfo[], AppError>(__TAURI_INVOKE("list_plugin_sheets")),
 };
 
 /* Types */
@@ -149,6 +152,13 @@ export type MapSummary = {
 	width: number,
 	height: number,
 	fogData: string | null,
+};
+
+export type PluginSheetInfo = {
+	pluginId: string,
+	sheetKey: string,
+	name: string,
+	filePath: string,
 };
 
 export type TokenSummary = {

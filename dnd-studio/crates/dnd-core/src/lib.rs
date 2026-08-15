@@ -209,6 +209,15 @@ pub struct PluginManifest {
     pub link_types: Vec<PluginLinkTypeRef>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginSheetInfo {
+    pub plugin_id: String,
+    pub sheet_key: String,
+    pub name: String,
+    pub file_path: String,
+}
+
 #[derive(Debug, thiserror::Error, Serialize, specta::Type)]
 #[serde(tag = "kind", content = "message")]
 pub enum AppError {
