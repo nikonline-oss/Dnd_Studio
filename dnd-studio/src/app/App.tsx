@@ -8,11 +8,13 @@ import { usePluginDragDrop } from '../shared/hooks/usePluginDragDrop';
 import { useThemeEffect } from '../shared/hooks/useThemeEffect';
 import { logDebug } from '../shared/lib/debug';
 import { useWorkspaceStore } from '../shared/stores/workspace';
+import { usePluginTheme } from '../shared/hooks/usePluginTheme';
 
 export default function App() {
   const workspaceReady = useWorkspaceStore.persist.hasHydrated();
 
   useThemeEffect();
+  usePluginTheme();
   useGlobalShortcuts();
   useAutoOpenLastCampaign(workspaceReady);
 

@@ -19,6 +19,9 @@ interface UiState {
   activeRightTab: RightTab;
   activeBottomTab: BottomTab;
 
+  pluginThemeId: string | null;
+  setPluginThemeId: (id: string | null) => void;
+
   setThemeMode: (mode: ThemeMode) => void;
 
   toggleLeft: () => void;
@@ -117,6 +120,10 @@ export const useUiStore = create<UiState>()(
             activeRightTab: tab,
           };
         }),
+
+      pluginThemeId: null,
+
+      setPluginThemeId: (pluginThemeId) => set({ pluginThemeId }),
     }),
     {
       name: 'dndstudio.ui',

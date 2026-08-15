@@ -3,6 +3,7 @@ import { type ThemeMode } from '../theme/theme';
 import { useActiveCampaign, useCloseCampaign } from '../api/hooks';
 import { save } from '@tauri-apps/plugin-dialog';
 import { useExportCampaign } from '../api/hooks';
+import { usePluginThemes } from '../api/hooks';
 
 const menuItems = ['File', 'Edit', 'View', 'Tools', 'Help'];
 
@@ -18,6 +19,27 @@ export function TopBar() {
   const closeCampaign = useCloseCampaign();
 
   const exportCampaign = useExportCampaign();
+
+  const { data: pluginThemes = [] } = usePluginThemes(Boolean(activeCampaign));
+
+  const pluginThemeId = useUiStore((state) => state.pluginThemeId);
+  const setPluginThemeId = useUiStore((state) => state.setPluginThemeId);
+
+  const handleThemeChange = (value: string) => {
+    if (value === 'system' || value === 'light' || value === 'dark') {
+      setThemeMode(value);
+      setPluginThemeId(null);
+    } else {
+      // value формат: "pluginId::themeKey"
+      setThemeMode('plugin');
+      setPluginThemeId(value);
+    }
+  };
+
+  const currentThemeValue =
+    themeMode === 'plugin' && pluginThemeId
+      ? pluginThemeId
+      : themeMode;
 
   const handleExport = async () => {
     if (!activeCampaign) return;
@@ -94,12 +116,25 @@ export function TopBar() {
         </button>
 
         <select
-          value={themeMode}
-          onChange={(event) => setThemeMode(event.target.value as ThemeMode)}
+          value={currentThemeValue}
+          onChange={(event) => handleThemeChange(event.target.value)}
         >
           <option value="system">System</option>
           <option value="light">Light</option>
           <option value="dark">Dark</option>
+
+          {pluginThemes.length > 0 && (
+            <optgroup label="Plugin themes">
+              {pluginThemes.map((theme) => {
+                const value = `${theme.pluginId}::${theme.themeKey}`;
+                return (
+                  <option key={value} value={value}>
+                    {theme.themeKey}
+                  </option>
+                );
+              })}
+            </optgroup>
+          )}
         </select>
       </div>
     </header>

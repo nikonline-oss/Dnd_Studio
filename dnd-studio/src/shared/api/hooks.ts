@@ -2,6 +2,23 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { commands, TokenSummary } from './bindings';
 import { useWorkspaceStore } from '../stores/workspace';
 import { logError } from '../lib/debug';
+import type { QueryClient } from '@tanstack/react-query';
+
+function invalidatePluginRelatedData(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ['plugins'] });
+
+  // Темы плагинов
+  queryClient.invalidateQueries({ queryKey: ['pluginThemes'] });
+  queryClient.invalidateQueries({ queryKey: ['pluginThemeCss'] });
+
+  // Листы плагинов
+  queryClient.invalidateQueries({ queryKey: ['pluginSheets'] });
+  queryClient.invalidateQueries({ queryKey: ['pluginSheet'] });
+
+  // Компендии, которые могли прийти из плагинов
+  queryClient.invalidateQueries({ queryKey: ['compendiums'] });
+  queryClient.invalidateQueries({ queryKey: ['compendiumEntries'] });
+}
 
 async function unwrap<T, E extends { kind: string; message?: string }>(
   promise: Promise<{ status: "ok"; data: T } | { status: "error"; error: E }>
@@ -746,7 +763,7 @@ export function useInstallPlugin() {
       unwrap(commands.installPluginFromFile(sourcePath)),
 
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['plugins'] });
+      invalidatePluginRelatedData(queryClient);
     },
 
     onError: (error) => {
@@ -768,7 +785,7 @@ export function useSetPluginActive() {
     }) => unwrap(commands.setPluginActive(pluginId, isActive)),
 
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['plugins'] });
+      invalidatePluginRelatedData(queryClient);
     },
 
     onError: (error) => {
@@ -785,8 +802,7 @@ export function useUninstallPlugin() {
       unwrap(commands.uninstallPlugin(pluginId)),
 
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['plugins'] });
-      queryClient.invalidateQueries({ queryKey: ['compendiums'] });
+      invalidatePluginRelatedData(queryClient);
     },
 
     onError: (error) => {
@@ -809,6 +825,24 @@ export function usePluginSheet(pluginId?: string, sheetKey?: string) {
     queryKey: ['pluginSheet', pluginId, sheetKey],
     queryFn: () => unwrap(commands.getPluginSheet(pluginId!, sheetKey!)),
     enabled: Boolean(pluginId && sheetKey),
+    retry: false,
+  });
+}
+
+export function usePluginThemes(enabled: boolean = true) {
+  return useQuery({
+    queryKey: ['pluginThemes'],
+    queryFn: () => unwrap(commands.listPluginThemes()),
+    enabled,
+    retry: false,
+  });
+}
+
+export function usePluginThemeCss(pluginId?: string, themeKey?: string) {
+  return useQuery({
+    queryKey: ['pluginThemeCss', pluginId, themeKey],
+    queryFn: () => unwrap(commands.getPluginThemeCss(pluginId!, themeKey!)),
+    enabled: Boolean(pluginId && themeKey),
     retry: false,
   });
 }

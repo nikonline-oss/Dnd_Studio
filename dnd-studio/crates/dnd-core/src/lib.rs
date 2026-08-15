@@ -218,6 +218,14 @@ pub struct PluginSheetInfo {
     pub file_path: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginThemeInfo {
+    pub plugin_id: String,
+    pub theme_key: String,
+    pub file_path: String,
+}
+
 #[derive(Debug, thiserror::Error, Serialize, specta::Type)]
 #[serde(tag = "kind", content = "message")]
 pub enum AppError {

@@ -1,11 +1,7 @@
 use crate::commands::require_db;
 use crate::state::{AppPaths, AppState};
 use dnd_core::{
-    AppError,
-    InstalledPluginSummary,
-    PluginCompendiumFile,
-    PluginManifest,
-    PluginSheetInfo
+    AppError, InstalledPluginSummary, PluginCompendiumFile, PluginManifest, PluginSheetInfo, PluginThemeInfo,
 };
 use std::fs;
 use std::io::Read;
@@ -72,14 +68,10 @@ fn read_compendium_file(
         .unwrap_or_default();
 
     match extension.as_str() {
-        "json" => {
-            serde_json::from_str::<PluginCompendiumFile>(&content)
-                .map_err(|e| AppError::Validation(format!("Invalid compendium JSON: {e}")))
-        }
-        "yaml" | "yml" => {
-            serde_yaml::from_str::<PluginCompendiumFile>(&content)
-                .map_err(|e| AppError::Validation(format!("Invalid compendium YAML: {e}")))
-        }
+        "json" => serde_json::from_str::<PluginCompendiumFile>(&content)
+            .map_err(|e| AppError::Validation(format!("Invalid compendium JSON: {e}"))),
+        "yaml" | "yml" => serde_yaml::from_str::<PluginCompendiumFile>(&content)
+            .map_err(|e| AppError::Validation(format!("Invalid compendium YAML: {e}"))),
         _ => Err(AppError::Validation(format!(
             "Unsupported compendium file extension: {}",
             extension
@@ -94,8 +86,7 @@ async fn import_plugin_compendiums(
     manifest: &PluginManifest,
 ) -> Result<(), AppError> {
     for compendium_ref in &manifest.compendiums {
-        let compendium_file =
-            read_compendium_file(plugin_root, &compendium_ref.file)?;
+        let compendium_file = read_compendium_file(plugin_root, &compendium_ref.file)?;
 
         let name = compendium_ref
             .name
@@ -154,8 +145,7 @@ pub async fn install_plugin_from_file(
     validate_plugin_id(&manifest.id)?;
     validate_plugin_version(&manifest.version)?;
 
-    let manifest_json =
-        serde_json::to_string(&manifest).map_err(AppError::io)?;
+    let manifest_json = serde_json::to_string(&manifest).map_err(AppError::io)?;
 
     // Распаковываем плагин
     let plugin_root = paths
@@ -200,13 +190,8 @@ pub async fn install_plugin_from_file(
     import_plugin_compendiums(&db, &plugin_root, &manifest).await?;
 
     // Сохраняем в installed_plugins
-    db.upsert_installed_plugin(
-        &manifest.id,
-        &manifest.version,
-        true,
-        &manifest_json,
-    )
-    .await?;
+    db.upsert_installed_plugin(&manifest.id, &manifest.version, true, &manifest_json)
+        .await?;
 
     db.get_installed_plugin(&manifest.id)
         .await?
@@ -359,4 +344,89 @@ pub async fn get_plugin_sheet(
     Ok(content)
 }
 
+/// Возвращает список всех тем из активных плагинов.
+#[tauri::command]
+#[specta::specta]
+pub async fn list_plugin_themes(
+    state: State<'_, AppState>,
+    paths: State<'_, AppPaths>,
+) -> Result<Vec<PluginThemeInfo>, AppError> {
+    let db = require_db(&state.campaign).await?;
 
+    let plugins = db.list_installed_plugins().await?;
+
+    let mut themes: Vec<PluginThemeInfo> = Vec::new();
+
+    for plugin in plugins {
+        if !plugin.is_active {
+            continue;
+        }
+
+        let manifest: PluginManifest =
+            serde_json::from_str(&plugin.manifest_json).map_err(AppError::io)?;
+
+        let plugin_root = paths
+            .data_dir
+            .join("plugins")
+            .join(&plugin.plugin_id)
+            .join(&plugin.version);
+
+        for theme_ref in &manifest.themes {
+            let file_path = plugin_root.join(&theme_ref.file);
+
+            if !file_path.exists() {
+                continue;
+            }
+
+            themes.push(PluginThemeInfo {
+                plugin_id: plugin.plugin_id.clone(),
+                theme_key: theme_ref.key.clone(),
+                file_path: theme_ref.file.clone(),
+            });
+        }
+    }
+
+    Ok(themes)
+}
+
+/// Возвращает содержимое CSS-файла темы.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_plugin_theme_css(
+    state: State<'_, AppState>,
+    paths: State<'_, AppPaths>,
+    plugin_id: String,
+    theme_key: String,
+) -> Result<String, AppError> {
+    let db = require_db(&state.campaign).await?;
+
+    let plugin = db
+        .get_installed_plugin(&plugin_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    let manifest: PluginManifest =
+        serde_json::from_str(&plugin.manifest_json).map_err(AppError::io)?;
+
+    let theme_ref = manifest
+        .themes
+        .iter()
+        .find(|t| t.key == theme_key)
+        .ok_or(AppError::NotFound)?;
+
+    let plugin_root = paths
+        .data_dir
+        .join("plugins")
+        .join(&plugin_id)
+        .join(&plugin.version);
+
+    let file_path = plugin_root.join(&theme_ref.file);
+
+    if !file_path.exists() {
+        return Err(AppError::NotFound);
+    }
+
+    let content = fs::read_to_string(&file_path).map_err(AppError::io)?;
+
+    Ok(content)
+}

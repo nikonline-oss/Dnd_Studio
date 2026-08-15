@@ -6,7 +6,12 @@ mod state;
 use commands::campaign::{
     close_campaign, create_campaign, get_active_campaign, list_campaigns, open_campaign,
 };
+use commands::campaign_io::{export_campaign, import_campaign};
 use commands::characters::{create_character, get_character, list_characters, update_character};
+use commands::compendiums::{
+    create_compendium, create_compendium_entry, delete_compendium, delete_compendium_entry,
+    list_compendium_entries, list_compendiums, update_compendium, update_compendium_entry,
+};
 use commands::journal::{
     create_journal_entry, delete_journal_entry, get_journal_entry, list_journal_entries,
     update_journal_entry,
@@ -14,15 +19,13 @@ use commands::journal::{
 use commands::maps::{
     create_map, get_map, import_map_image, list_maps, read_campaign_asset_data_url, update_map_fog,
 };
+use commands::plugins::{
+    get_plugin_sheet, get_plugin_theme_css, install_plugin_from_file, list_installed_plugins,
+    list_plugin_sheets, list_plugin_themes, set_plugin_active, uninstall_plugin,
+};
 use commands::tokens::{
     assign_token_character, create_token, delete_token, list_tokens, move_token,
 };
-use commands::compendiums::{
-    create_compendium, create_compendium_entry, list_compendium_entries, list_compendiums,
-    update_compendium, delete_compendium, update_compendium_entry, delete_compendium_entry
-};
-use commands::campaign_io::{export_campaign, import_campaign};
-use commands::plugins::{install_plugin_from_file, list_installed_plugins, set_plugin_active, uninstall_plugin, get_plugin_sheet, list_plugin_sheets};
 use specta_typescript::Typescript;
 use state::{AppPaths, AppState};
 use tauri::Manager;
@@ -72,7 +75,9 @@ fn main() {
             set_plugin_active,
             uninstall_plugin,
             get_plugin_sheet,
-            list_plugin_sheets
+            list_plugin_sheets,
+            list_plugin_themes,
+            get_plugin_theme_css
         ]);
 
     #[cfg(debug_assertions)]

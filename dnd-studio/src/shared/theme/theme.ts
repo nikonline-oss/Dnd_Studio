@@ -1,4 +1,4 @@
-export type ThemeMode = 'system' | 'light' | 'dark';
+export type ThemeMode = 'system' | 'light' | 'dark' | 'plugin';
 export type ResolvedTheme = 'light' | 'dark';
 
 export function resolveTheme(mode: ThemeMode): ResolvedTheme {

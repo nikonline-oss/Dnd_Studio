@@ -1,29 +1,42 @@
-import { useLayoutEffect } from 'react';
+import { useEffect } from 'react';
 
 import { useUiStore } from '../stores/ui';
-import { applyThemeMode } from '../theme/theme';
+
+function applyTheme() {
+  const themeMode = useUiStore.getState().themeMode;
+  const pluginThemeId = useUiStore.getState().pluginThemeId;
+
+  if (themeMode === 'plugin' && pluginThemeId) {
+    return;
+  }
+
+  const media = window.matchMedia('(prefers-color-scheme: dark)');
+
+  const resolved =
+    themeMode === 'system' ? (media.matches ? 'dark' : 'light') : themeMode;
+
+  document.documentElement.dataset.theme = resolved;
+}
 
 export function useThemeEffect() {
-  useLayoutEffect(() => {
-    applyThemeMode(useUiStore.getState().themeMode);
+  useEffect(() => {
+    applyTheme();
 
     const unsubscribe = useUiStore.subscribe(() => {
-      applyThemeMode(useUiStore.getState().themeMode);
+      applyTheme();
     });
 
     const media = window.matchMedia('(prefers-color-scheme: dark)');
 
-    const onSystemThemeChange = () => {
-      if (useUiStore.getState().themeMode === 'system') {
-        applyThemeMode(useUiStore.getState().themeMode);
-      }
+    const listener = () => {
+      applyTheme();
     };
 
-    media.addEventListener('change', onSystemThemeChange);
+    media.addEventListener('change', listener);
 
     return () => {
       unsubscribe();
-      media.removeEventListener('change', onSystemThemeChange);
+      media.removeEventListener('change', listener);
     };
   }, []);
 }

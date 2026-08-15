@@ -73,6 +73,10 @@ export const commands = {
 	getPluginSheet: (pluginId: string, sheetKey: string) => typedError<string, AppError>(__TAURI_INVOKE("get_plugin_sheet", { pluginId, sheetKey })),
 	/**  Возвращает список всех декларативных листов из активных плагинов. */
 	listPluginSheets: () => typedError<PluginSheetInfo[], AppError>(__TAURI_INVOKE("list_plugin_sheets")),
+	/**  Возвращает список всех тем из активных плагинов. */
+	listPluginThemes: () => typedError<PluginThemeInfo[], AppError>(__TAURI_INVOKE("list_plugin_themes")),
+	/**  Возвращает содержимое CSS-файла темы. */
+	getPluginThemeCss: (pluginId: string, themeKey: string) => typedError<string, AppError>(__TAURI_INVOKE("get_plugin_theme_css", { pluginId, themeKey })),
 };
 
 /* Types */
@@ -158,6 +162,12 @@ export type PluginSheetInfo = {
 	pluginId: string,
 	sheetKey: string,
 	name: string,
+	filePath: string,
+};
+
+export type PluginThemeInfo = {
+	pluginId: string,
+	themeKey: string,
 	filePath: string,
 };
 
