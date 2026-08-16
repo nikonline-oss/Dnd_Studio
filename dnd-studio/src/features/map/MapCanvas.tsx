@@ -4,7 +4,7 @@ import {
     useRef,
     useState,
 } from 'react';
-import { readCampaignAssetDataUrl, useAssetDataUrl } from '../../shared/api/hooks';
+import { useAssetDataUrl } from '../../shared/api/hooks';
 import type { MapSummary, TokenSummary } from '../../shared/api/bindings';
 
 interface Viewport {

@@ -1,5 +1,4 @@
 import { useUiStore } from '../stores/ui';
-import { type ThemeMode } from '../theme/theme';
 import { useActiveCampaign, useCloseCampaign } from '../api/hooks';
 import { save } from '@tauri-apps/plugin-dialog';
 import { useExportCampaign } from '../api/hooks';
