@@ -14,7 +14,6 @@ export function StatusBar() {
       </div>
 
       <div className="statusbar-center">
-        // В JSX:
         <span className={`status-connection status-${connectionStatus}`}>
           {connectionStatus === 'connected' && '🟢 Connected'}
           {connectionStatus === 'connecting' && '🟡 Connecting…'}

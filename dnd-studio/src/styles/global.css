@@ -2529,3 +2529,82 @@ select:focus-visible {
 .status-error {
   color: #ef5350;
 }
+
+.connection-room-info {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--surface-2, #2a2a2a);
+  border-radius: 8px;
+  border: 1px solid var(--border, #3a3a3a);
+}
+
+.connection-room-info h4 {
+  margin: 0 0 12px 0;
+  color: var(--success, #4caf50);
+  font-size: 14px;
+}
+
+.connection-info-row {
+  margin-bottom: 12px;
+}
+
+.connection-info-row label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  margin-bottom: 4px;
+}
+
+.connection-info-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.connection-info-value code {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--surface-1, #1a1a1a);
+  border: 1px solid var(--border, #3a3a3a);
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.copy-button {
+  padding: 8px 12px;
+  background: var(--primary, #2196f3);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background 0.2s;
+}
+
+.copy-button:hover {
+  background: var(--primary-dark, #1976d2);
+}
+
+.copy-button:active {
+  transform: scale(0.95);
+}
+
+.connection-info-hint {
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--info-bg, rgba(33, 150, 243, 0.1));
+  border-left: 3px solid var(--info, #2196f3);
+  border-radius: 4px;
+}
+
+.connection-info-hint p {
+  margin: 4px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.connection-info-hint strong {
+  color: var(--text, #fff);
+}

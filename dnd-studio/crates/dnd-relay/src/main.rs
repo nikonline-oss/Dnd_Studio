@@ -12,6 +12,7 @@ use protocol::{CreateRoomRequest, CreateRoomResponse, RoomInfo};
 use room::Room;
 use state::AppState;
 use std::sync::Arc;
+use tower_http::cors::{Any, CorsLayer};
 use tracing::info;
 
 /// Health check
@@ -28,7 +29,6 @@ async fn create_room(
     State(state): State<Arc<AppState>>,
     Json(request): Json<CreateRoomRequest>,
 ) -> Result<Json<CreateRoomResponse>, StatusCode> {
-    // Генерируем GM токен
     let gm_token = uuid::Uuid::new_v4().to_string();
 
     let max_players = request
@@ -92,12 +92,19 @@ async fn main() {
         }
     });
 
-    // Роутер
+    // Настраиваем CORS
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
+    // Роутер — используем :param синтаксис для Axum 0.7
     let app = Router::new()
         .route("/api/health", get(health))
         .route("/api/rooms", post(create_room))
-        .route("/api/rooms/:room_id", get(get_room_info))
-        .route("/ws/:room_id", get(ws::ws_handler))
+        .route("/api/rooms/:room_id", get(get_room_info))  // <-- :room_id
+        .route("/ws/:room_id", get(ws::ws_handler))         // <-- :room_id
+        .layer(cors)
         .with_state(state);
 
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], 3001));
