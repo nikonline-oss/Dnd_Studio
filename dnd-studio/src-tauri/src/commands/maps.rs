@@ -1,4 +1,4 @@
-use crate::commands::require_db;
+use crate::{commands::require_db, state::AppPaths};
 use crate::state::AppState;
 use base64::Engine;
 use dnd_core::{AppError, MapSummary};
@@ -44,45 +44,28 @@ pub async fn get_map(
 #[specta::specta]
 pub async fn import_map_image(
     state: State<'_, AppState>,
+    paths: State<'_, AppPaths>,
     map_id: String,
     source_path: String,
 ) -> Result<MapSummary, AppError> {
     let db = require_db(&state.campaign).await?;
 
+    // Проверяем, что карта существует
     db.get_map(&map_id).await?.ok_or(AppError::NotFound)?;
 
-    let source = Path::new(&source_path);
+    // Импортируем ассет через пайплайн
+    let asset =
+        crate::commands::assets::import_asset_inner(&db, &paths, &source_path, "map").await?;
 
-    if !source.exists() {
-        return Err(AppError::Validation(
-            "Source image file not found".to_string(),
-        ));
+    // Привязываем ассет к карте
+    db.update_map_asset(&map_id, Some(asset.id.clone())).await?;
+
+    // Обновляем размеры карты из изображения
+    if let (Some(w), Some(h)) = (asset.width, asset.height) {
+        db.update_map_dimensions(&map_id, w, h).await?;
     }
 
-    let extension = source
-        .extension()
-        .and_then(|value| value.to_str())
-        .map(|value| value.to_ascii_lowercase())
-        .ok_or_else(|| AppError::Validation("Image extension is required".to_string()))?;
-
-    if !matches!(extension.as_str(), "png" | "jpg" | "jpeg" | "webp" | "gif") {
-        return Err(AppError::Validation(
-            "Unsupported image type. Use png, jpg, jpeg, webp or gif".to_string(),
-        ));
-    }
-
-    let maps_dir = db.assets_dir().join("maps");
-
-    std::fs::create_dir_all(&maps_dir).map_err(AppError::io)?;
-
-    let destination = maps_dir.join(format!("{map_id}.{extension}"));
-
-    std::fs::copy(source, &destination).map_err(AppError::io)?;
-
-    let relative_image_path = format!("maps/{map_id}.{extension}");
-
-    db.update_map_image_path(&map_id, &relative_image_path)
-        .await
+    db.get_map(&map_id).await?.ok_or(AppError::NotFound)
 }
 
 #[tauri::command]

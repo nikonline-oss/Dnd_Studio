@@ -101,6 +101,18 @@ export const commands = {
 	deleteJournalLink: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_journal_link", { id })),
 	/**  Устанавливает встроенный плагин из ресурсов приложения. */
 	installBuiltinPlugin: (pluginName: string) => typedError<InstalledPluginSummary, AppError>(__TAURI_INVOKE("install_builtin_plugin", { pluginName })),
+	/**  Импорт ассета с полным пайплайном */
+	importAsset: (sourcePath: string, assetType: string) => typedError<AssetSummary, AppError>(__TAURI_INVOKE("import_asset", { sourcePath, assetType })),
+	/**  Возвращает путь к файлу ассета */
+	getAssetFilePath: (assetId: string) => typedError<string, AppError>(__TAURI_INVOKE("get_asset_file_path", { assetId })),
+	/**  Возвращает путь к thumbnail ассета */
+	getAssetThumbPath: (assetId: string) => typedError<string, AppError>(__TAURI_INVOKE("get_asset_thumb_path", { assetId })),
+	/**  Возвращает содержимое ассета как data URL (base64) */
+	getAssetDataUrl: (assetId: string) => typedError<string, AppError>(__TAURI_INVOKE("get_asset_data_url", { assetId })),
+	/**  Удаляет ассет */
+	deleteAsset: (assetId: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_asset", { assetId })),
+	/**  Список ассетов по типу */
+	listAssets: (assetType: string) => typedError<AssetSummary[], AppError>(__TAURI_INVOKE("list_assets", { assetType })),
 };
 
 /* Types */
@@ -112,6 +124,19 @@ export type ActiveCampaign = {
 };
 
 export type AppError = { kind: "Db"; message: string } | { kind: "Io"; message: string } | { kind: "Validation"; message: string } | { kind: "NotFound" } | { kind: "NoCampaign" };
+
+export type AssetSummary = {
+	id: string,
+	type: string,
+	filename: string,
+	contentHash: string,
+	mimeType: string,
+	sizeBytes: number,
+	width: number | null,
+	height: number | null,
+	thumbFilename: string | null,
+	createdAt: number,
+};
 
 export type CampaignSummary = {
 	id: string,

@@ -477,33 +477,33 @@ export async function readCampaignAssetDataUrl(
   return unwrap(commands.readCampaignAssetDataUrl(relativePath));
 }
 
-export function useImportMapImage() {
-  const queryClient = useQueryClient();
+// export function useImportMapImage() {
+//   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: ({
-      mapId,
-      sourcePath,
-    }: {
-      mapId: string;
-      sourcePath: string;
-    }) => unwrap(commands.importMapImage(mapId, sourcePath)),
+//   return useMutation({
+//     mutationFn: ({
+//       mapId,
+//       sourcePath,
+//     }: {
+//       mapId: string;
+//       sourcePath: string;
+//     }) => unwrap(commands.importMapImage(mapId, sourcePath)),
 
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['map', variables.mapId],
-      });
+//     onSuccess: (_data, variables) => {
+//       queryClient.invalidateQueries({
+//         queryKey: ['map', variables.mapId],
+//       });
 
-      queryClient.invalidateQueries({
-        queryKey: ['maps'],
-      });
-    },
+//       queryClient.invalidateQueries({
+//         queryKey: ['maps'],
+//       });
+//     },
 
-    onError: (error) => {
-      logError('api', 'import map image failed', error);
-    },
-  });
-}
+//     onError: (error) => {
+//       logError('api', 'import map image failed', error);
+//     },
+//   });
+// }
 
 export function useAssignTokenCharacter() {
   const queryClient = useQueryClient();
@@ -948,5 +948,62 @@ export function useInstallBuiltinPlugin() {
     onError: (error) => {
       logError('api', 'install builtin plugin failed', error);
     },
+  });
+}
+
+export function useImportAsset() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sourcePath,
+      assetType,
+    }: {
+      sourcePath: string;
+      assetType: string;
+    }) => unwrap(commands.importAsset(sourcePath, assetType)),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assets'] });
+    },
+
+    onError: (error) => {
+      logError('api', 'import asset failed', error);
+    },
+  });
+}
+
+export function useImportMapImage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      mapId,
+      sourcePath,
+    }: {
+      mapId: string;
+      sourcePath: string;
+    }) => unwrap(commands.importMapImage(mapId, sourcePath)),
+
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['map', variables.mapId],
+      });
+      queryClient.invalidateQueries({ queryKey: ['maps'] });
+    },
+
+    onError: (error) => {
+      logError('api', 'import map image failed', error);
+    },
+  });
+}
+
+export function useAssetDataUrl(assetId?: string) {
+  return useQuery({
+    queryKey: ['assetDataUrl', assetId],
+    queryFn: () => unwrap(commands.getAssetDataUrl(assetId!)),
+    enabled: Boolean(assetId),
+    retry: false,
+    staleTime: Infinity,
   });
 }

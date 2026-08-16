@@ -4,7 +4,7 @@ import {
     useRef,
     useState,
 } from 'react';
-import { readCampaignAssetDataUrl } from '../../shared/api/hooks';
+import { readCampaignAssetDataUrl, useAssetDataUrl } from '../../shared/api/hooks';
 import type { MapSummary, TokenSummary } from '../../shared/api/bindings';
 
 interface Viewport {
@@ -133,6 +133,7 @@ export function MapCanvas({
         modified: Set<string>;
     } | null>(null);
 
+    const { data: assetDataUrl } = useAssetDataUrl(map.assetId ?? undefined);
     const tokenRadius = Math.max(10, (map.gridSize || 50) * 0.45);
 
     const fit = useCallback(() => {
@@ -361,57 +362,30 @@ export function MapCanvas({
         imageRef.current = null;
         setImageVersion((version) => version + 1);
 
-        const relativePath = map.imagePath;
-
-        if (!relativePath) {
+        if (!assetDataUrl) {
             return;
         }
 
-        if (relativePath.startsWith('placeholder://')) {
-            return;
-        }
+        const image = new Image();
 
-        readCampaignAssetDataUrl(relativePath)
-            .then((dataUrl) => {
-                if (cancelled) {
-                    return;
-                }
+        image.onload = () => {
+            if (cancelled) return;
+            imageRef.current = image;
+            setImageVersion((version) => version + 1);
+        };
 
-                const image = new Image();
+        image.onerror = () => {
+            if (cancelled) return;
+            imageRef.current = null;
+            setImageVersion((version) => version + 1);
+        };
 
-                image.onload = () => {
-                    if (cancelled) {
-                        return;
-                    }
-
-                    imageRef.current = image;
-                    setImageVersion((version) => version + 1);
-                };
-
-                image.onerror = () => {
-                    if (cancelled) {
-                        return;
-                    }
-
-                    imageRef.current = null;
-                    setImageVersion((version) => version + 1);
-                };
-
-                image.src = dataUrl;
-            })
-            .catch(() => {
-                if (cancelled) {
-                    return;
-                }
-
-                imageRef.current = null;
-                setImageVersion((version) => version + 1);
-            });
+        image.src = assetDataUrl;
 
         return () => {
             cancelled = true;
         };
-    }, [map.id, map.imagePath]);
+    }, [assetDataUrl]);
 
     // Отрисовка.
     useEffect(() => {

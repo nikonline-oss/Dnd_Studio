@@ -334,6 +334,33 @@ impl CampaignDb {
         self.get_map(map_id).await?.ok_or(AppError::NotFound)
     }
 
+    pub async fn update_map_dimensions(
+        &self,
+        map_id: &str,
+        width: i32,
+        height: i32,
+    ) -> Result<(), AppError> {
+        let result = sqlx::query(
+            r#"
+        UPDATE maps
+        SET width = ?, height = ?, version = version + 1
+        WHERE id = ?
+        "#,
+        )
+        .bind(width)
+        .bind(height)
+        .bind(map_id)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        Ok(())
+    }
+
     // ============================================
     // tokens
     // ============================================
@@ -1571,6 +1598,177 @@ impl CampaignDb {
 
         Ok(())
     }
+
+    pub async fn create_asset(
+        &self,
+        id: &str,
+        asset_type: &str,
+        filename: &str,
+        content_hash: &str,
+        mime_type: &str,
+        size_bytes: i32,
+        width: Option<i32>,
+        height: Option<i32>,
+        thumb_filename: Option<String>,
+        created_at: i32,
+    ) -> Result<dnd_core::AssetSummary, AppError> {
+        sqlx::query(
+            r#"
+        INSERT INTO assets (
+            id, type, filename, content_hash, mime_type,
+            size_bytes, width, height, thumb_filename, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(type, content_hash) DO NOTHING
+        "#,
+        )
+        .bind(id)
+        .bind(asset_type)
+        .bind(filename)
+        .bind(content_hash)
+        .bind(mime_type)
+        .bind(size_bytes)
+        .bind(width)
+        .bind(height)
+        .bind(&thumb_filename)
+        .bind(created_at)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        // Возвращаем либо новый, либо существующий (по хэшу)
+        self.get_asset_by_hash(asset_type, content_hash)
+            .await?
+            .ok_or(AppError::NotFound)
+    }
+
+    pub fn get_asset(&self, id: &str) -> Result<Option<dnd_core::AssetSummary>, AppError> {
+        // Синхронный метод для использования в async контексте через block_on
+        // В реальном коде лучше сделать async
+        unimplemented!("Use async version")
+    }
+
+    pub async fn get_asset_by_hash(
+        &self,
+        asset_type: &str,
+        content_hash: &str,
+    ) -> Result<Option<dnd_core::AssetSummary>, AppError> {
+        let row = sqlx::query_as::<
+            _,
+            (
+                String,
+                String,
+                String,
+                String,
+                String,
+                i32,
+                Option<i32>,
+                Option<i32>,
+                Option<String>,
+                i32,
+            ),
+        >(
+            r#"
+        SELECT
+            id, type, filename, content_hash, mime_type,
+            size_bytes, width, height, thumb_filename, created_at
+        FROM assets
+        WHERE type = ? AND content_hash = ?
+        "#,
+        )
+        .bind(asset_type)
+        .bind(content_hash)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(row.map(row_to_asset))
+    }
+
+    pub async fn get_asset_async(
+        &self,
+        id: &str,
+    ) -> Result<Option<dnd_core::AssetSummary>, AppError> {
+        let row = sqlx::query_as::<
+            _,
+            (
+                String,
+                String,
+                String,
+                String,
+                String,
+                i32,
+                Option<i32>,
+                Option<i32>,
+                Option<String>,
+                i32,
+            ),
+        >(
+            r#"
+        SELECT
+            id, type, filename, content_hash, mime_type,
+            size_bytes, width, height, thumb_filename, created_at
+        FROM assets
+        WHERE id = ?
+        "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(row.map(row_to_asset))
+    }
+
+    pub async fn list_assets(
+        &self,
+        asset_type: &str,
+    ) -> Result<Vec<dnd_core::AssetSummary>, AppError> {
+        let rows = sqlx::query_as::<
+            _,
+            (
+                String,
+                String,
+                String,
+                String,
+                String,
+                i32,
+                Option<i32>,
+                Option<i32>,
+                Option<String>,
+                i32,
+            ),
+        >(
+            r#"
+        SELECT
+            id, type, filename, content_hash, mime_type,
+            size_bytes, width, height, thumb_filename, created_at
+        FROM assets
+        WHERE type = ?
+        ORDER BY created_at DESC
+        "#,
+        )
+        .bind(asset_type)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(rows.into_iter().map(row_to_asset).collect())
+    }
+
+    pub async fn delete_asset(&self, id: &str) -> Result<(), AppError> {
+        let result = sqlx::query("DELETE FROM assets WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        Ok(())
+    }
 }
 
 // ============================================
@@ -1731,6 +1929,46 @@ fn row_to_token(
     }
 }
 
+fn row_to_asset(
+    row: (
+        String,
+        String,
+        String,
+        String,
+        String,
+        i32,
+        Option<i32>,
+        Option<i32>,
+        Option<String>,
+        i32,
+    ),
+) -> dnd_core::AssetSummary {
+    let (
+        id,
+        asset_type,
+        filename,
+        content_hash,
+        mime_type,
+        size_bytes,
+        width,
+        height,
+        thumb_filename,
+        created_at,
+    ) = row;
+
+    dnd_core::AssetSummary {
+        id,
+        r#type: asset_type,
+        filename,
+        content_hash,
+        mime_type,
+        size_bytes,
+        width,
+        height,
+        thumb_filename,
+        created_at,
+    }
+}
 // ============================================
 // CampaignIndexStore
 // ============================================

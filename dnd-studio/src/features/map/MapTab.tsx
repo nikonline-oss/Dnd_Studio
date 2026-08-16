@@ -207,6 +207,7 @@ export function MapTab({ mapId }: { mapId?: string }) {
     }
   };
 
+
   const handleLoadImage = async () => {
     try {
       const selected = await open({

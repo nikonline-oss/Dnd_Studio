@@ -27,6 +27,14 @@ use commands::plugins::{
 use commands::tokens::{
     assign_token_character, create_token, delete_token, list_tokens, move_token,
 };
+use commands::assets::{
+    import_asset,
+    get_asset_file_path,
+    get_asset_thumb_path,
+    get_asset_data_url,
+    delete_asset,
+    list_assets,
+};
 use specta_typescript::Typescript;
 use state::{AppPaths, AppState};
 use tauri::Manager;
@@ -83,7 +91,13 @@ fn main() {
             list_journal_links,
             create_journal_link,
             delete_journal_link,
-            install_builtin_plugin
+            install_builtin_plugin,
+            import_asset,
+            get_asset_file_path,
+            get_asset_thumb_path,
+            get_asset_data_url,
+            delete_asset, 
+            list_assets,
         ]);
 
     #[cfg(debug_assertions)]
