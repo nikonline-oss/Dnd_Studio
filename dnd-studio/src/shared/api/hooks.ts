@@ -18,7 +18,7 @@ function invalidatePluginRelatedData(queryClient: QueryClient) {
   // Компендии, которые могли прийти из плагинов
   queryClient.invalidateQueries({ queryKey: ['compendiums'] });
   queryClient.invalidateQueries({ queryKey: ['compendiumEntries'] });
-  
+
   queryClient.invalidateQueries({ queryKey: ['linkTypes'] });
 }
 
@@ -973,6 +973,16 @@ export function useImportAsset() {
   });
 }
 
+export interface MapImageImportOptions {
+  targetWidth: number;
+  targetHeight: number;
+  gridSize: number;
+  cropX: number | null;
+  cropY: number | null;
+  cropWidth: number | null;
+  cropHeight: number | null;
+}
+
 export function useImportMapImage() {
   const queryClient = useQueryClient();
 
@@ -980,10 +990,12 @@ export function useImportMapImage() {
     mutationFn: ({
       mapId,
       sourcePath,
+      options,
     }: {
       mapId: string;
       sourcePath: string;
-    }) => unwrap(commands.importMapImage(mapId, sourcePath)),
+      options: MapImageImportOptions;
+    }) => unwrap(commands.importMapImage(mapId, sourcePath, options)),
 
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
@@ -998,6 +1010,16 @@ export function useImportMapImage() {
   });
 }
 
+export function useReadFileAsDataUrl() {
+  return useMutation({
+    mutationFn: (filePath: string) =>
+      unwrap(commands.readFileAsDataUrl(filePath)),
+
+    onError: (error) => {
+      logError('api', 'read file as data url failed', error);
+    },
+  });
+}
 export function useAssetDataUrl(assetId?: string) {
   return useQuery({
     queryKey: ['assetDataUrl', assetId],

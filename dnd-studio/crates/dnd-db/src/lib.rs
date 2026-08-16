@@ -361,6 +361,35 @@ impl CampaignDb {
         Ok(())
     }
 
+    pub async fn update_map_settings(
+        &self,
+        map_id: &str,
+        width: i32,
+        height: i32,
+        grid_size: i32,
+    ) -> Result<(), AppError> {
+        let result = sqlx::query(
+            r#"
+        UPDATE maps
+        SET width = ?, height = ?, grid_size = ?, version = version + 1
+        WHERE id = ?
+        "#,
+        )
+        .bind(width)
+        .bind(height)
+        .bind(grid_size)
+        .bind(map_id)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        Ok(())
+    }
+
     // ============================================
     // tokens
     // ============================================

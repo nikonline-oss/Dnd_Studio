@@ -68,7 +68,7 @@ export const commands = {
 	version: number,
 } | null, AppError>(__TAURI_INVOKE("get_character", { id })),
 	updateCharacter: (id: string, name: string, characterType: string, dataJson: string) => typedError<CharacterDetail, AppError>(__TAURI_INVOKE("update_character", { id, name, characterType, dataJson })),
-	importMapImage: (mapId: string, sourcePath: string) => typedError<MapSummary, AppError>(__TAURI_INVOKE("import_map_image", { mapId, sourcePath })),
+	importMapImage: (mapId: string, sourcePath: string, options: MapImageImportOptions) => typedError<MapSummary, AppError>(__TAURI_INVOKE("import_map_image", { mapId, sourcePath, options })),
 	readCampaignAssetDataUrl: (relativePath: string) => typedError<string, AppError>(__TAURI_INVOKE("read_campaign_asset_data_url", { relativePath })),
 	updateMapFog: (mapId: string, fogData: string | null) => typedError<null, AppError>(__TAURI_INVOKE("update_map_fog", { mapId, fogData })),
 	listCompendiums: () => typedError<CompendiumSummary[], AppError>(__TAURI_INVOKE("list_compendiums")),
@@ -113,6 +113,11 @@ export const commands = {
 	deleteAsset: (assetId: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_asset", { assetId })),
 	/**  Список ассетов по типу */
 	listAssets: (assetType: string) => typedError<AssetSummary[], AppError>(__TAURI_INVOKE("list_assets", { assetType })),
+	/**
+	 *  Читает произвольный файл (выбранный через диалог) и возвращает data URL.
+	 *  Используется для превью изображения перед импортом.
+	 */
+	readFileAsDataUrl: (filePath: string) => typedError<string, AppError>(__TAURI_INVOKE("read_file_as_data_url", { filePath })),
 };
 
 /* Types */
@@ -230,6 +235,17 @@ export type LinkTypeInfo = {
 	directed: boolean,
 	color: string | null,
 	sourcePluginId: string | null,
+};
+
+/**  Параметры импорта изображения карты */
+export type MapImageImportOptions = {
+	targetWidth: number,
+	targetHeight: number,
+	gridSize: number,
+	cropX: number | null,
+	cropY: number | null,
+	cropWidth: number | null,
+	cropHeight: number | null,
 };
 
 export type MapSummary = {

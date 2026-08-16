@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useUpdateMapFog } from '../../shared/api/hooks';
 import { open } from '@tauri-apps/plugin-dialog';
+import { MapImageImportDialog } from './MapImageImportDialog';
+import type { MapImageImportOptions } from '../../shared/api/hooks';
 
 import {
   useCharacters,
@@ -44,6 +46,8 @@ export function MapTab({ mapId }: { mapId?: string }) {
 
   // Локальное состояние тумана
   const [localFogCells, setLocalFogCells] = useState<Set<string>>(new Set());
+
+  const [pendingImagePath, setPendingImagePath] = useState<string | null>(null);
 
   // Синхронизация с БД при загрузке карты
   useEffect(() => {
@@ -221,14 +225,36 @@ export function MapTab({ mapId }: { mapId?: string }) {
       });
 
       if (typeof selected === 'string') {
-        importMapImage.mutate({
-          mapId: map.id,
-          sourcePath: selected,
-        });
+        // Открываем диалог вместо прямого импорта
+        setPendingImagePath(selected);
       }
     } catch (error) {
       console.error('Failed to select image', error);
     }
+  };
+
+  const handleImportConfirm = (options: MapImageImportOptions) => {
+    if (!pendingImagePath) return;
+
+    importMapImage.mutate(
+      {
+        mapId: map.id,
+        sourcePath: pendingImagePath,
+        options,
+      },
+      {
+        onSuccess: () => {
+          setPendingImagePath(null);
+        },
+        onError: () => {
+          setPendingImagePath(null);
+        },
+      },
+    );
+  };
+
+  const handleImportCancel = () => {
+    setPendingImagePath(null);
   };
 
   return (
@@ -335,6 +361,14 @@ export function MapTab({ mapId }: { mapId?: string }) {
         fogMode={fogMode}
         onFogChange={handleFogChange}
       />
+      {pendingImagePath && (
+        <MapImageImportDialog
+          sourcePath={pendingImagePath}
+          onConfirm={handleImportConfirm}
+          onCancel={handleImportCancel}
+          isImporting={importMapImage.isPending}
+        />
+      )}
     </div>
   );
 }

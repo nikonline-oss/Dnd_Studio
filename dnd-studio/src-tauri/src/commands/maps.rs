@@ -1,5 +1,5 @@
-use crate::{commands::require_db, state::AppPaths};
 use crate::state::AppState;
+use crate::{commands::require_db, state::AppPaths};
 use base64::Engine;
 use dnd_core::{AppError, MapSummary};
 use std::path::Path;
@@ -40,6 +40,19 @@ pub async fn get_map(
     db.get_map(&id).await
 }
 
+/// Параметры импорта изображения карты
+#[derive(Debug, Clone, serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct MapImageImportOptions {
+    pub target_width: i32,
+    pub target_height: i32,
+    pub grid_size: i32,
+    pub crop_x: Option<u32>,
+    pub crop_y: Option<u32>,
+    pub crop_width: Option<u32>,
+    pub crop_height: Option<u32>,
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn import_map_image(
@@ -47,23 +60,87 @@ pub async fn import_map_image(
     paths: State<'_, AppPaths>,
     map_id: String,
     source_path: String,
+    options: MapImageImportOptions,
 ) -> Result<MapSummary, AppError> {
     let db = require_db(&state.campaign).await?;
 
     // Проверяем, что карта существует
     db.get_map(&map_id).await?.ok_or(AppError::NotFound)?;
 
-    // Импортируем ассет через пайплайн
-    let asset =
-        crate::commands::assets::import_asset_inner(&db, &paths, &source_path, "map").await?;
+    // Валидация параметров
+    if options.target_width <= 0 || options.target_height <= 0 {
+        return Err(AppError::Validation(
+            "Target width and height must be positive".to_string(),
+        ));
+    }
+
+    if options.grid_size <= 0 {
+        return Err(AppError::Validation(
+            "Grid size must be positive".to_string(),
+        ));
+    }
+
+    // Открываем изображение
+    let mut img = image::open(&source_path)
+        .map_err(|e| AppError::Validation(format!("Failed to open image: {}", e)))?;
+
+    // Применяем crop если задан
+    if let (Some(cx), Some(cy), Some(cw), Some(ch)) = (
+        options.crop_x,
+        options.crop_y,
+        options.crop_width,
+        options.crop_height,
+    ) {
+        // Проверяем границы crop
+        let img_w = img.width();
+        let img_h = img.height();
+
+        if cx + cw > img_w || cy + ch > img_h {
+            return Err(AppError::Validation(
+                "Crop region exceeds image bounds".to_string(),
+            ));
+        }
+
+        img = img.crop_imm(cx, cy, cw, ch);
+    }
+
+    // Масштабируем до целевого размера
+    let img = img.resize_exact(
+        options.target_width as u32,
+        options.target_height as u32,
+        image::imageops::FilterType::Lanczos3,
+    );
+
+    // Сохраняем во временный файл
+    let temp_dir = std::env::temp_dir();
+    let temp_path = temp_dir.join(format!("dndstudio_map_{}.webp", uuid::Uuid::new_v4()));
+
+    img.save_with_format(&temp_path, image::ImageFormat::WebP)
+        .map_err(|e| AppError::Io(format!("Failed to save temp image: {}", e)))?;
+
+    // Импортируем через asset pipeline
+    let asset = crate::commands::assets::import_asset_inner(
+        &db,
+        &paths,
+        &temp_path.to_string_lossy(),
+        "map",
+    )
+    .await?;
+
+    // Удаляем временный файл
+    let _ = std::fs::remove_file(&temp_path);
 
     // Привязываем ассет к карте
     db.update_map_asset(&map_id, Some(asset.id.clone())).await?;
 
-    // Обновляем размеры карты из изображения
-    if let (Some(w), Some(h)) = (asset.width, asset.height) {
-        db.update_map_dimensions(&map_id, w, h).await?;
-    }
+    // Обновляем размеры и сетку карты
+    db.update_map_settings(
+        &map_id,
+        options.target_width,
+        options.target_height,
+        options.grid_size,
+    )
+    .await?;
 
     db.get_map(&map_id).await?.ok_or(AppError::NotFound)
 }

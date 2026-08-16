@@ -34,6 +34,7 @@ use commands::assets::{
     get_asset_data_url,
     delete_asset,
     list_assets,
+    read_file_as_data_url
 };
 use specta_typescript::Typescript;
 use state::{AppPaths, AppState};
@@ -98,6 +99,7 @@ fn main() {
             get_asset_data_url,
             delete_asset, 
             list_assets,
+            read_file_as_data_url,
         ]);
 
     #[cfg(debug_assertions)]

@@ -331,7 +331,6 @@ pub async fn import_asset_inner(
     source_path: &str,
     asset_type: &str,
 ) -> Result<AssetSummary, AppError> {
-
     // Валидация типа
     let valid_types = ["map", "token", "portrait", "audio", "icon"];
     if !valid_types.contains(&asset_type) {
@@ -447,4 +446,41 @@ pub async fn import_asset_inner(
         .await?;
 
     Ok(asset)
+}
+
+/// Читает произвольный файл (выбранный через диалог) и возвращает data URL.
+/// Используется для превью изображения перед импортом.
+#[tauri::command]
+#[specta::specta]
+pub async fn read_file_as_data_url(
+    _state: State<'_, AppState>,
+    file_path: String,
+) -> Result<String, AppError> {
+    let path = std::path::Path::new(&file_path);
+
+    if !path.exists() {
+        return Err(AppError::Validation("File not found".to_string()));
+    }
+
+    let bytes = std::fs::read(path).map_err(AppError::io)?;
+
+    // Определяем MIME-тип по расширению
+    let mime = match path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .as_deref()
+    {
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("webp") => "image/webp",
+        Some("gif") => "image/gif",
+        Some("bmp") => "image/bmp",
+        _ => "application/octet-stream",
+    };
+
+    use base64::Engine;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
+
+    Ok(format!("data:{};base64,{}", mime, encoded))
 }
