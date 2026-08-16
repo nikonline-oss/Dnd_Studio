@@ -1029,3 +1029,49 @@ export function useAssetDataUrl(assetId?: string) {
     staleTime: Infinity,
   });
 }
+
+export interface DependencyCheckResult {
+  allSatisfied: boolean;
+  missing: string[];
+  inactive: string[];
+  warnings: string[];
+}
+
+export function useValidatePluginDependencies() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (pluginId: string) =>
+      unwrap(commands.validatePluginDependencies(pluginId)),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plugins'] });
+    },
+
+    onError: (error) => {
+      logError('api', 'validate plugin dependencies failed', error);
+    },
+  });
+}
+
+export function useCanDeactivatePlugin() {
+  return useMutation({
+    mutationFn: (pluginId: string) =>
+      unwrap(commands.canDeactivatePlugin(pluginId)),
+
+    onError: (error) => {
+      logError('api', 'can deactivate plugin check failed', error);
+    },
+  });
+}
+
+export function useCanUninstallPlugin() {
+  return useMutation({
+    mutationFn: (pluginId: string) =>
+      unwrap(commands.canUninstallPlugin(pluginId)),
+
+    onError: (error) => {
+      logError('api', 'can uninstall plugin check failed', error);
+    },
+  });
+}

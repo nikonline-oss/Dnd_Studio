@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
+  DependencyCheckResult,
   useActiveCampaign,
   useCharacters,
   useCompendiums,
@@ -15,16 +16,17 @@ import {
   useSetPluginActive,
   useUninstallPlugin,
   useUpdateCompendium,
+  useValidatePluginDependencies,
 } from '../api/hooks';
 import { useUiStore } from '../stores/ui';
 import { useWorkspaceStore } from '../stores/workspace';
-
 
 
 function parsePluginManifest(rawJson: string): {
   name?: string;
   description?: string;
   author?: string;
+  dependencies?: Array<{ id: string; version: string }>;
 } | null {
   try {
     return JSON.parse(rawJson);
@@ -32,6 +34,7 @@ function parsePluginManifest(rawJson: string): {
     return null;
   }
 }
+
 function PluginsPanel() {
   const { data: activeCampaign } = useActiveCampaign();
 
@@ -43,6 +46,13 @@ function PluginsPanel() {
   const installBuiltinPlugin = useInstallBuiltinPlugin();
   const setPluginActive = useSetPluginActive();
   const uninstallPlugin = useUninstallPlugin();
+  const validateDeps = useValidatePluginDependencies();
+
+  // Состояние для отображения результата проверки зависимостей
+  const [depCheckResult, setDepCheckResult] = useState<{
+    pluginId: string;
+    result: DependencyCheckResult;
+  } | null>(null);
 
   if (!activeCampaign) {
     return (
@@ -76,12 +86,62 @@ function PluginsPanel() {
     installBuiltinPlugin.mutate(pluginName);
   };
 
-  // Проверяем, установлен ли SRD
+  const handleToggleActive = (pluginId: string, isActive: boolean) => {
+    setPluginActive.mutate(
+      { pluginId, isActive },
+      {
+        onError: (error: Error) => {
+          alert(
+            `Failed to ${isActive ? 'activate' : 'deactivate'} plugin:\n${error.message}`,
+          );
+        },
+      },
+    );
+  };
+
+  const handleValidateDeps = (pluginId: string) => {
+    validateDeps.mutate(pluginId, {
+      onSuccess: (result) => {
+        setDepCheckResult({ pluginId, result });
+      },
+    });
+  };
+
+  const handleUninstall = (pluginId: string, pluginName: string) => {
+    // Проверяем зависимости перед удалением
+    const dependents = plugins.filter((p) => {
+      const manifest = parsePluginManifest(p.manifestJson);
+      return manifest?.dependencies?.some((d) => d.id === pluginId);
+    });
+
+    if (dependents.length > 0) {
+      const depNames = dependents
+        .map((d) => {
+          const m = parsePluginManifest(d.manifestJson);
+          return m?.name ?? d.pluginId;
+        })
+        .join(', ');
+
+      alert(
+        `Cannot uninstall "${pluginName}".\nDependent plugins: ${depNames}`,
+      );
+      return;
+    }
+
+    if (
+      window.confirm(
+        `Uninstall plugin "${pluginName}"? Its compendiums will be removed.`,
+      )
+    ) {
+      uninstallPlugin.mutate(pluginId);
+    }
+  };
+
   const hasSrdPlugin = plugins.some((p) => p.pluginId === 'srd-monsters');
 
   return (
     <div className="navigator">
-      {/* Секция Built-in plugins */}
+      {/* Built-in plugins */}
       <div className="navigator-section">
         <div className="navigator-section-title">Built-in Plugins</div>
 
@@ -107,7 +167,7 @@ function PluginsPanel() {
         </div>
       </div>
 
-      {/* Секция Installed plugins */}
+      {/* Installed plugins */}
       <div className="navigator-section">
         <div className="navigator-section-title">Installed Plugins</div>
 
@@ -128,6 +188,7 @@ function PluginsPanel() {
         <div className="plugin-list">
           {plugins.map((plugin) => {
             const manifest = parsePluginManifest(plugin.manifestJson);
+            const deps = manifest?.dependencies ?? [];
 
             return (
               <div key={plugin.pluginId} className="plugin-item">
@@ -137,10 +198,7 @@ function PluginsPanel() {
                     checked={plugin.isActive}
                     disabled={setPluginActive.isPending}
                     onChange={(event) =>
-                      setPluginActive.mutate({
-                        pluginId: plugin.pluginId,
-                        isActive: event.target.checked,
-                      })
+                      handleToggleActive(plugin.pluginId, event.target.checked)
                     }
                   />
 
@@ -159,21 +217,93 @@ function PluginsPanel() {
                         {manifest.description}
                       </div>
                     )}
+
+                    {/* Зависимости */}
+                    {deps.length > 0 && (
+                      <div className="plugin-deps">
+                        <span className="plugin-deps-label">Deps:</span>
+                        {deps.map((dep) => {
+                          const depInstalled = plugins.some(
+                            (p) => p.pluginId === dep.id,
+                          );
+                          const depActive = plugins.some(
+                            (p) => p.pluginId === dep.id && p.isActive,
+                          );
+
+                          return (
+                            <span
+                              key={dep.id}
+                              className={
+                                depActive
+                                  ? 'plugin-dep-ok'
+                                  : depInstalled
+                                    ? 'plugin-dep-inactive'
+                                    : 'plugin-dep-missing'
+                              }
+                              title={`${dep.id} ${dep.version}`}
+                            >
+                              {dep.id}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Предупреждение о совместимости */}
+                    {plugin.compatWarning && (
+                      <div className="plugin-warning">
+                        ⚠️ {plugin.compatWarning}
+                      </div>
+                    )}
+
+                    {/* Результат проверки зависимостей */}
+                    {depCheckResult?.pluginId === plugin.pluginId && (
+                      <div className="plugin-dep-check">
+                        {depCheckResult.result.allSatisfied ? (
+                          <span className="plugin-dep-ok">
+                            ✓ All dependencies satisfied
+                          </span>
+                        ) : (
+                          <div>
+                            {depCheckResult.result.missing.length > 0 && (
+                              <div className="plugin-dep-missing">
+                                Missing: {depCheckResult.result.missing.join(', ')}
+                              </div>
+                            )}
+                            {depCheckResult.result.inactive.length > 0 && (
+                              <div className="plugin-dep-inactive">
+                                Inactive: {depCheckResult.result.inactive.join(', ')}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </label>
 
                 <div className="plugin-actions">
                   <button
                     type="button"
+                    className="icon-btn"
+                    title="Validate dependencies"
+                    onClick={() => handleValidateDeps(plugin.pluginId)}
+                    disabled={validateDeps.isPending}
+                  >
+                    🔍
+                  </button>
+
+                  <button
+                    type="button"
                     className="icon-btn icon-btn-danger"
                     title="Uninstall plugin"
                     disabled={uninstallPlugin.isPending}
-                    onClick={() => {
-                      const name = manifest?.name ?? plugin.pluginId;
-                      if (window.confirm(`Uninstall plugin "${name}"? Its compendiums will be removed.`)) {
-                        uninstallPlugin.mutate(plugin.pluginId);
-                      }
-                    }}
+                    onClick={() =>
+                      handleUninstall(
+                        plugin.pluginId,
+                        manifest?.name ?? plugin.pluginId,
+                      )
+                    }
                   >
                     🗑️
                   </button>
@@ -186,7 +316,6 @@ function PluginsPanel() {
     </div>
   );
 }
-
 
 /* ========================================= */
 /* Панель Компендиев                         */

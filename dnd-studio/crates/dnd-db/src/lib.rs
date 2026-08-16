@@ -1490,6 +1490,80 @@ impl CampaignDb {
         Ok(())
     }
 
+    /// Проверяет, установлен ли плагин с указанным ID
+    pub async fn is_plugin_installed(&self, plugin_id: &str) -> Result<bool, AppError> {
+        let row = sqlx::query_scalar::<_, i32>(
+            "SELECT COUNT(*) FROM installed_plugins WHERE plugin_id = ?",
+        )
+        .bind(plugin_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(row > 0)
+    }
+
+    /// Проверяет, активен ли плагин
+    pub async fn is_plugin_active(&self, plugin_id: &str) -> Result<bool, AppError> {
+        let row = sqlx::query_scalar::<_, i32>(
+            "SELECT COUNT(*) FROM installed_plugins WHERE plugin_id = ? AND is_active = 1",
+        )
+        .bind(plugin_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(row > 0)
+    }
+
+    /// Возвращает список ID активных плагинов, которые зависят от указанного
+    pub async fn get_dependent_plugins(&self, plugin_id: &str) -> Result<Vec<String>, AppError> {
+        let plugins = self.list_installed_plugins().await?;
+
+        let mut dependents = Vec::new();
+
+        for plugin in plugins {
+            if !plugin.is_active {
+                continue;
+            }
+
+            let manifest: Result<dnd_core::PluginManifest, _> =
+                serde_json::from_str(&plugin.manifest_json);
+
+            if let Ok(manifest) = manifest {
+                for dep in &manifest.dependencies {
+                    if dep.id == plugin_id {
+                        dependents.push(plugin.plugin_id.clone());
+                        break;
+                    }
+                }
+            }
+        }
+
+        Ok(dependents)
+    }
+
+    /// Обновляет compat_warning для плагина
+    pub async fn set_plugin_compat_warning(
+        &self,
+        plugin_id: &str,
+        warning: Option<String>,
+    ) -> Result<(), AppError> {
+        let result =
+            sqlx::query("UPDATE installed_plugins SET compat_warning = ? WHERE plugin_id = ?")
+                .bind(&warning)
+                .bind(plugin_id)
+                .execute(&self.pool)
+                .await
+                .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        Ok(())
+    }
+
     // ============================================
     // journal_links
     // ============================================

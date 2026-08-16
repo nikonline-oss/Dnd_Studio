@@ -3,6 +3,10 @@
 mod commands;
 mod state;
 
+use commands::assets::{
+    delete_asset, get_asset_data_url, get_asset_file_path, get_asset_thumb_path, import_asset,
+    list_assets, read_file_as_data_url,
+};
 use commands::campaign::{
     close_campaign, create_campaign, get_active_campaign, list_campaigns, open_campaign,
 };
@@ -13,28 +17,22 @@ use commands::compendiums::{
     list_compendium_entries, list_compendiums, update_compendium, update_compendium_entry,
 };
 use commands::journal::{
-    create_journal_entry, delete_journal_entry, get_journal_entry, list_journal_entries,
-    update_journal_entry, list_journal_links, create_journal_link, delete_journal_link
+    create_journal_entry, create_journal_link, delete_journal_entry, delete_journal_link,
+    get_journal_entry, list_journal_entries, list_journal_links, update_journal_entry,
 };
 use commands::maps::{
     create_map, get_map, import_map_image, list_maps, read_campaign_asset_data_url, update_map_fog,
 };
+use commands::plugin_deps::{
+    can_deactivate_plugin, can_uninstall_plugin, validate_plugin_dependencies,
+};
 use commands::plugins::{
-    get_plugin_sheet, get_plugin_theme_css, install_plugin_from_file, list_installed_plugins,
-    list_plugin_sheets, list_plugin_themes, set_plugin_active, uninstall_plugin, list_link_types,
-    install_builtin_plugin
+    get_plugin_sheet, get_plugin_theme_css, install_builtin_plugin, install_plugin_from_file,
+    list_installed_plugins, list_link_types, list_plugin_sheets, list_plugin_themes,
+    set_plugin_active, uninstall_plugin,
 };
 use commands::tokens::{
     assign_token_character, create_token, delete_token, list_tokens, move_token,
-};
-use commands::assets::{
-    import_asset,
-    get_asset_file_path,
-    get_asset_thumb_path,
-    get_asset_data_url,
-    delete_asset,
-    list_assets,
-    read_file_as_data_url
 };
 use specta_typescript::Typescript;
 use state::{AppPaths, AppState};
@@ -97,9 +95,12 @@ fn main() {
             get_asset_file_path,
             get_asset_thumb_path,
             get_asset_data_url,
-            delete_asset, 
+            delete_asset,
             list_assets,
             read_file_as_data_url,
+            validate_plugin_dependencies,
+            can_deactivate_plugin,
+            can_uninstall_plugin
         ]);
 
     #[cfg(debug_assertions)]

@@ -106,7 +106,6 @@ async fn import_plugin_compendiums(
 
     Ok(())
 }
-
 #[tauri::command]
 #[specta::specta]
 pub async fn install_plugin_from_file(
@@ -147,6 +146,18 @@ pub async fn install_plugin_from_file(
     validate_plugin_version(&manifest.version)?;
 
     let manifest_json = serde_json::to_string(&manifest).map_err(AppError::io)?;
+
+    // Проверяем зависимости
+    let dep_result = crate::commands::plugin_deps::check_dependencies(&db, &manifest).await?;
+
+    let warning = if dep_result.warnings.is_empty() {
+        None
+    } else {
+        Some(dep_result.warnings.join("; "))
+    };
+
+    // Активен только если все зависимости удовлетворены
+    let should_activate = dep_result.all_satisfied;
 
     // Распаковываем плагин
     let plugin_root = paths
@@ -191,8 +202,16 @@ pub async fn install_plugin_from_file(
     import_plugin_compendiums(&db, &plugin_root, &manifest).await?;
 
     // Сохраняем в installed_plugins
-    db.upsert_installed_plugin(&manifest.id, &manifest.version, true, &manifest_json)
-        .await?;
+    db.upsert_installed_plugin(
+        &manifest.id,
+        &manifest.version,
+        should_activate,
+        &manifest_json,
+    )
+    .await?;
+
+    // Устанавливаем compat_warning
+    db.set_plugin_compat_warning(&manifest.id, warning).await?;
 
     db.get_installed_plugin(&manifest.id)
         .await?
@@ -216,6 +235,44 @@ pub async fn set_plugin_active(
     is_active: bool,
 ) -> Result<InstalledPluginSummary, AppError> {
     let db = require_db(&state.campaign).await?;
+
+    if is_active {
+        // При активации проверяем зависимости
+        let plugin = db
+            .get_installed_plugin(&plugin_id)
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+        let manifest: PluginManifest = serde_json::from_str(&plugin.manifest_json)
+            .map_err(|e| AppError::Validation(format!("Invalid manifest: {}", e)))?;
+
+        let dep_result = crate::commands::plugin_deps::check_dependencies(&db, &manifest).await?;
+
+        if !dep_result.missing.is_empty() {
+            return Err(AppError::Validation(format!(
+                "Cannot activate plugin: missing dependencies: {}",
+                dep_result.missing.join(", ")
+            )));
+        }
+
+        if !dep_result.inactive.is_empty() {
+            return Err(AppError::Validation(format!(
+                "Cannot activate plugin: inactive dependencies: {}",
+                dep_result.inactive.join(", ")
+            )));
+        }
+    } else {
+        // При деактивации проверяем, не зависит ли кто-то от этого плагина
+        let dependents = db.get_dependent_plugins(&plugin_id).await?;
+
+        if !dependents.is_empty() {
+            return Err(AppError::Validation(format!(
+                "Cannot deactivate plugin: active plugins depend on it: {}",
+                dependents.join(", ")
+            )));
+        }
+    }
+
     db.set_plugin_active(&plugin_id, is_active).await
 }
 

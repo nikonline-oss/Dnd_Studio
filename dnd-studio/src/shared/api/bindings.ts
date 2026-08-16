@@ -118,6 +118,18 @@ export const commands = {
 	 *  Используется для превью изображения перед импортом.
 	 */
 	readFileAsDataUrl: (filePath: string) => typedError<string, AppError>(__TAURI_INVOKE("read_file_as_data_url", { filePath })),
+	/**  Проверяет зависимости установленного плагина и обновляет compat_warning */
+	validatePluginDependencies: (pluginId: string) => typedError<DependencyCheckResult, AppError>(__TAURI_INVOKE("validate_plugin_dependencies", { pluginId })),
+	/**
+	 *  Проверяет, можно ли деактивировать плагин.
+	 *  Возвращает список активных плагинов, которые зависят от указанного.
+	 */
+	canDeactivatePlugin: (pluginId: string) => typedError<string[], AppError>(__TAURI_INVOKE("can_deactivate_plugin", { pluginId })),
+	/**
+	 *  Проверяет, можно ли удалить плагин.
+	 *  Возвращает список плагинов, которые зависят от указанного.
+	 */
+	canUninstallPlugin: (pluginId: string) => typedError<string[], AppError>(__TAURI_INVOKE("can_uninstall_plugin", { pluginId })),
 };
 
 /* Types */
@@ -184,6 +196,14 @@ export type CompendiumSummary = {
 	sourcePluginId: string | null,
 	type: string,
 	version: string,
+};
+
+/**  Результат проверки зависимостей */
+export type DependencyCheckResult = {
+	allSatisfied: boolean,
+	missing: string[],
+	inactive: string[],
+	warnings: string[],
 };
 
 export type InstalledPluginSummary = {
