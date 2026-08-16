@@ -91,13 +91,18 @@ pub async fn import_map_image(
         options.crop_width,
         options.crop_height,
     ) {
-        // Проверяем границы crop
         let img_w = img.width();
         let img_h = img.height();
 
-        if cx + cw > img_w || cy + ch > img_h {
+        // Clamp crop к границам изображения вместо ошибки
+        let cx = cx.min(img_w.saturating_sub(1));
+        let cy = cy.min(img_h.saturating_sub(1));
+        let cw = cw.min(img_w.saturating_sub(cx));
+        let ch = ch.min(img_h.saturating_sub(cy));
+
+        if cw == 0 || ch == 0 {
             return Err(AppError::Validation(
-                "Crop region exceeds image bounds".to_string(),
+                "Crop region is empty after clamping".to_string(),
             ));
         }
 

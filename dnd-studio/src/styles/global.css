@@ -2335,3 +2335,31 @@ select:focus-visible {
 
   background: var(--gold-softer);
 }
+
+.map-import-canvas {
+  max-width: 100%;
+  max-height: 440px;
+  display: block;
+  border-radius: 4px;
+}
+
+.map-import-info {
+  display: flex;
+  gap: 16px;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.map-import-checkbox {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.map-import-hint-inline {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: italic;
+}
