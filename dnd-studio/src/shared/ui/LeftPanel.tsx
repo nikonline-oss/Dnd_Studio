@@ -8,6 +8,7 @@ import {
   useCreateCompendium,
   useCreateMap,
   useDeleteCompendium,
+  useInstallBuiltinPlugin,
   useInstalledPlugins,
   useInstallPlugin,
   useMaps,
@@ -31,17 +32,17 @@ function parsePluginManifest(rawJson: string): {
     return null;
   }
 }
-
 function PluginsPanel() {
   const { data: activeCampaign } = useActiveCampaign();
-  const uninstallPlugin = useUninstallPlugin();
 
   const { data: plugins = [], isLoading } = useInstalledPlugins(
     Boolean(activeCampaign),
   );
 
   const installPlugin = useInstallPlugin();
+  const installBuiltinPlugin = useInstallBuiltinPlugin();
   const setPluginActive = useSetPluginActive();
+  const uninstallPlugin = useUninstallPlugin();
 
   if (!activeCampaign) {
     return (
@@ -71,10 +72,44 @@ function PluginsPanel() {
     }
   };
 
+  const handleInstallBuiltin = (pluginName: string) => {
+    installBuiltinPlugin.mutate(pluginName);
+  };
+
+  // Проверяем, установлен ли SRD
+  const hasSrdPlugin = plugins.some((p) => p.pluginId === 'srd-monsters');
+
   return (
     <div className="navigator">
+      {/* Секция Built-in plugins */}
       <div className="navigator-section">
-        <div className="navigator-section-title">Plugins</div>
+        <div className="navigator-section-title">Built-in Plugins</div>
+
+        <div className="builtin-plugin-card">
+          <div className="builtin-plugin-info">
+            <div className="builtin-plugin-name">SRD Monsters</div>
+            <div className="builtin-plugin-description">
+              Базовый набор монстров из SRD (8 монстров)
+            </div>
+          </div>
+
+          {hasSrdPlugin ? (
+            <span className="builtin-plugin-installed">✓ Installed</span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => handleInstallBuiltin('srd-monsters')}
+              disabled={installBuiltinPlugin.isPending}
+            >
+              {installBuiltinPlugin.isPending ? 'Installing…' : 'Install'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Секция Installed plugins */}
+      <div className="navigator-section">
+        <div className="navigator-section-title">Installed Plugins</div>
 
         <button
           type="button"

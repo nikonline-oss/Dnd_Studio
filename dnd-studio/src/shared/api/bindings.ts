@@ -20,10 +20,17 @@ export const commands = {
 	id: string,
 	worldId: string,
 	name: string,
-	imagePath: string,
+	assetId: string | null,
+	imagePath: string | null,
 	gridSize: number,
+	gridOffsetX: number | null,
+	gridOffsetY: number | null,
+	scale: number | null,
 	width: number,
 	height: number,
+	sortOrder: number,
+	isVisibleToPlayers: boolean,
+	version: number,
 	fogData: string | null,
 } | null, AppError>(__TAURI_INVOKE("get_map", { id })),
 	createToken: (mapId: string, x: number | null, y: number | null, characterId: string | null) => typedError<TokenSummary, AppError>(__TAURI_INVOKE("create_token", { mapId, x, y, characterId })),
@@ -40,15 +47,25 @@ export const commands = {
 	title: string,
 	contentMarkdown: string,
 	folderPath: string,
-	isVisibleToPlayers: boolean,
+	visibility: string,
+	playersCanEdit: boolean,
+	sortOrder: number,
+	createdAt: number,
+	updatedAt: number,
+	version: number,
 } | null, AppError>(__TAURI_INVOKE("get_journal_entry", { id })),
-	updateJournalEntry: (id: string, title: string, contentMarkdown: string, folderPath: string, isVisibleToPlayers: boolean) => typedError<JournalEntryDetail, AppError>(__TAURI_INVOKE("update_journal_entry", { id, title, contentMarkdown, folderPath, isVisibleToPlayers })),
+	updateJournalEntry: (id: string, title: string, contentMarkdown: string, folderPath: string, visibility: string, playersCanEdit: boolean) => typedError<JournalEntryDetail, AppError>(__TAURI_INVOKE("update_journal_entry", { id, title, contentMarkdown, folderPath, visibility, playersCanEdit })),
 	deleteJournalEntry: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_journal_entry", { id })),
 	getCharacter: (id: string) => typedError<{
 	id: string,
 	name: string,
 	type: string,
 	dataJson: string,
+	status: string,
+	portraitAssetId: string | null,
+	createdAt: number,
+	updatedAt: number,
+	version: number,
 } | null, AppError>(__TAURI_INVOKE("get_character", { id })),
 	updateCharacter: (id: string, name: string, characterType: string, dataJson: string) => typedError<CharacterDetail, AppError>(__TAURI_INVOKE("update_character", { id, name, characterType, dataJson })),
 	importMapImage: (mapId: string, sourcePath: string) => typedError<MapSummary, AppError>(__TAURI_INVOKE("import_map_image", { mapId, sourcePath })),
@@ -77,6 +94,13 @@ export const commands = {
 	listPluginThemes: () => typedError<PluginThemeInfo[], AppError>(__TAURI_INVOKE("list_plugin_themes")),
 	/**  Возвращает содержимое CSS-файла темы. */
 	getPluginThemeCss: (pluginId: string, themeKey: string) => typedError<string, AppError>(__TAURI_INVOKE("get_plugin_theme_css", { pluginId, themeKey })),
+	/**  Возвращает все доступные типы связей: встроенные + из активных плагинов. */
+	listLinkTypes: () => typedError<LinkTypeInfo[], AppError>(__TAURI_INVOKE("list_link_types")),
+	listJournalLinks: (entryId: string) => typedError<JournalLinkSummary[], AppError>(__TAURI_INVOKE("list_journal_links", { entryId })),
+	createJournalLink: (sourceEntryId: string, targetType: string, targetId: string, linkType: string, isDirected: boolean, label: string | null) => typedError<JournalLinkSummary, AppError>(__TAURI_INVOKE("create_journal_link", { sourceEntryId, targetType, targetId, linkType, isDirected, label })),
+	deleteJournalLink: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_journal_link", { id })),
+	/**  Устанавливает встроенный плагин из ресурсов приложения. */
+	installBuiltinPlugin: (pluginName: string) => typedError<InstalledPluginSummary, AppError>(__TAURI_INVOKE("install_builtin_plugin", { pluginName })),
 };
 
 /* Types */
@@ -102,12 +126,18 @@ export type CharacterDetail = {
 	name: string,
 	type: string,
 	dataJson: string,
+	status: string,
+	portraitAssetId: string | null,
+	createdAt: number,
+	updatedAt: number,
+	version: number,
 };
 
 export type CharacterSummary = {
 	id: string,
 	name: string,
 	type: string,
+	status: string,
 };
 
 export type CompendiumEntrySummary = {
@@ -123,6 +153,7 @@ export type CompendiumSummary = {
 	name: string,
 	sourcePluginId: string | null,
 	type: string,
+	version: string,
 };
 
 export type InstalledPluginSummary = {
@@ -130,6 +161,8 @@ export type InstalledPluginSummary = {
 	version: string,
 	isActive: boolean,
 	manifestJson: string,
+	installedAt: number,
+	compatWarning: string | null,
 };
 
 export type JournalEntryDetail = {
@@ -137,24 +170,58 @@ export type JournalEntryDetail = {
 	title: string,
 	contentMarkdown: string,
 	folderPath: string,
-	isVisibleToPlayers: boolean,
+	visibility: string,
+	playersCanEdit: boolean,
+	sortOrder: number,
+	createdAt: number,
+	updatedAt: number,
+	version: number,
 };
 
 export type JournalEntrySummary = {
 	id: string,
 	title: string,
 	folderPath: string,
+	visibility: string,
+	playersCanEdit: boolean,
+	sortOrder: number,
+};
+
+export type JournalLinkSummary = {
+	id: string,
+	sourceEntryId: string,
+	targetType: string,
+	targetId: string,
+	linkType: string,
+	isDirected: boolean,
+	weight: number | null,
+	label: string | null,
 	isVisibleToPlayers: boolean,
+};
+
+export type LinkTypeInfo = {
+	key: string,
+	label: string,
+	directed: boolean,
+	color: string | null,
+	sourcePluginId: string | null,
 };
 
 export type MapSummary = {
 	id: string,
 	worldId: string,
 	name: string,
-	imagePath: string,
+	assetId: string | null,
+	imagePath: string | null,
 	gridSize: number,
+	gridOffsetX: number | null,
+	gridOffsetY: number | null,
+	scale: number | null,
 	width: number,
 	height: number,
+	sortOrder: number,
+	isVisibleToPlayers: boolean,
+	version: number,
 	fogData: string | null,
 };
 
@@ -175,11 +242,15 @@ export type TokenSummary = {
 	id: string,
 	mapId: string,
 	characterId: string | null,
-	characterName: string | null,
+	assetId: string | null,
 	x: number | null,
 	y: number | null,
 	rotation: number | null,
+	scale: number | null,
 	isVisible: boolean,
+	layer: string,
+	version: number,
+	characterName: string | null,
 };
 
 /* Tauri Specta runtime */

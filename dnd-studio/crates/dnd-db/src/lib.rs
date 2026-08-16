@@ -1,7 +1,7 @@
 use dnd_core::{
     AppError, CampaignSummary, CharacterDetail, CharacterSummary, CompendiumEntrySummary,
-    CompendiumSummary, InstalledPluginSummary, JournalEntryDetail, JournalEntrySummary, MapSummary,
-     TokenSummary,
+    CompendiumSummary, InstalledPluginSummary, JournalEntryDetail, JournalEntrySummary,
+    JournalLinkSummary, MapSummary, TokenSummary,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
@@ -53,6 +53,10 @@ impl CampaignDb {
         &self.path
     }
 
+    // ============================================
+    // campaign_meta
+    // ============================================
+
     pub async fn set_meta(&self, key: &str, value: &str) -> Result<(), AppError> {
         sqlx::query(
             r#"
@@ -79,6 +83,10 @@ impl CampaignDb {
         Ok(rows.into_iter().collect())
     }
 
+    // ============================================
+    // worlds
+    // ============================================
+
     pub async fn default_world_id(&self) -> Result<String, AppError> {
         let existing = sqlx::query_scalar::<_, String>(
             "SELECT id FROM worlds ORDER BY sort_order, rowid LIMIT 1",
@@ -93,7 +101,7 @@ impl CampaignDb {
 
         let id = uuid::Uuid::new_v4().to_string();
 
-        sqlx::query("INSERT INTO worlds (id, name, sort_order) VALUES (?, ?, 0)")
+        sqlx::query("INSERT INTO worlds (id, name, sort_order, version) VALUES (?, ?, 0, 0)")
             .bind(&id)
             .bind("Default")
             .execute(&self.pool)
@@ -102,6 +110,10 @@ impl CampaignDb {
 
         Ok(id)
     }
+
+    // ============================================
+    // maps
+    // ============================================
 
     pub async fn create_map(
         &self,
@@ -130,26 +142,20 @@ impl CampaignDb {
         }
 
         let id = uuid::Uuid::new_v4().to_string();
-        let image_path = format!("assets/maps/{id}.png");
 
         sqlx::query(
             r#"
         INSERT INTO maps (
-            id,
-            world_id,
-            name,
-            image_path,
-            grid_size,
-            width,
-            height
+            id, world_id, name, asset_id, image_path, grid_size,
+            grid_offset_x, grid_offset_y, scale,
+            width, height, sort_order, is_visible_to_players, version
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, NULL, NULL, ?, 0, 0, 1.0, ?, ?, 0, 0, 0)
         "#,
         )
         .bind(&id)
         .bind(world_id)
         .bind(&name)
-        .bind(&image_path)
         .bind(grid_size)
         .bind(width)
         .bind(height)
@@ -161,42 +167,57 @@ impl CampaignDb {
             id,
             world_id: world_id.to_string(),
             name,
-            image_path,
+            asset_id: None,
+            image_path: None,
             grid_size,
+            grid_offset_x: 0.0,
+            grid_offset_y: 0.0,
+            scale: 1.0,
             width,
             height,
+            sort_order: 0,
+            is_visible_to_players: false,
+            version: 0,
             fog_data: None,
         })
     }
 
     pub async fn list_maps(&self) -> Result<Vec<MapSummary>, AppError> {
-        let rows = sqlx::query_as::<_, (String, String, String, String, i32, i32, i32)>(
+        let rows = sqlx::query_as::<
+            _,
+            (
+                String,
+                String,
+                String,
+                Option<String>,
+                Option<String>,
+                i32,
+                f64,
+                f64,
+                f64,
+                i32,
+                i32,
+                i32,
+                i32,
+                i32,
+                Option<Vec<u8>>,
+            ),
+        >(
             r#"
         SELECT
-            id, world_id, name, image_path, grid_size, width, height
+            id, world_id, name, asset_id, image_path, grid_size,
+            grid_offset_x, grid_offset_y, scale,
+            width, height, sort_order, is_visible_to_players, version,
+            fog_data
         FROM maps
-        ORDER BY name
+        ORDER BY sort_order, name
         "#,
         )
         .fetch_all(&self.pool)
         .await
         .map_err(AppError::db)?;
 
-        Ok(rows
-            .into_iter()
-            .map(
-                |(id, world_id, name, image_path, grid_size, width, height)| MapSummary {
-                    id,
-                    world_id,
-                    name,
-                    image_path,
-                    grid_size,
-                    width,
-                    height,
-                    fog_data: None,
-                },
-            )
-            .collect())
+        Ok(rows.into_iter().map(row_to_map).collect())
     }
 
     pub async fn get_map(&self, id: &str) -> Result<Option<MapSummary>, AppError> {
@@ -206,16 +227,26 @@ impl CampaignDb {
                 String,
                 String,
                 String,
-                String,
-                i32,
-                i32,
-                i32,
                 Option<String>,
+                Option<String>,
+                i32,
+                f64,
+                f64,
+                f64,
+                i32,
+                i32,
+                i32,
+                i32,
+                i32,
+                Option<Vec<u8>>,
             ),
         >(
             r#"
         SELECT
-            id, world_id, name, image_path, grid_size, width, height, fog_data
+            id, world_id, name, asset_id, image_path, grid_size,
+            grid_offset_x, grid_offset_y, scale,
+            width, height, sort_order, is_visible_to_players, version,
+            fog_data
         FROM maps
         WHERE id = ?
         "#,
@@ -225,19 +256,87 @@ impl CampaignDb {
         .await
         .map_err(AppError::db)?;
 
-        Ok(row.map(
-            |(id, world_id, name, image_path, grid_size, width, height, fog_data)| MapSummary {
-                id,
-                world_id,
-                name,
-                image_path,
-                grid_size,
-                width,
-                height,
-                fog_data,
-            },
-        ))
+        Ok(row.map(row_to_map))
     }
+
+    pub async fn update_map_asset(
+        &self,
+        map_id: &str,
+        asset_id: Option<String>,
+    ) -> Result<MapSummary, AppError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE maps
+            SET asset_id = ?, version = version + 1
+            WHERE id = ?
+            "#,
+        )
+        .bind(&asset_id)
+        .bind(map_id)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        self.get_map(map_id).await?.ok_or(AppError::NotFound)
+    }
+
+    pub async fn update_map_fog(
+        &self,
+        map_id: &str,
+        fog_data: Option<String>,
+    ) -> Result<(), AppError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE maps
+            SET fog_data = ?
+            WHERE id = ?
+            "#,
+        )
+        .bind(&fog_data)
+        .bind(map_id)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        Ok(())
+    }
+
+    pub async fn update_map_image_path(
+        &self,
+        map_id: &str,
+        image_path: &str,
+    ) -> Result<MapSummary, AppError> {
+        let result = sqlx::query(
+            r#"
+        UPDATE maps
+        SET image_path = ?, version = version + 1
+        WHERE id = ?
+        "#,
+        )
+        .bind(image_path)
+        .bind(map_id)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        self.get_map(map_id).await?.ok_or(AppError::NotFound)
+    }
+
+    // ============================================
+    // tokens
+    // ============================================
 
     pub async fn create_token(
         &self,
@@ -250,17 +349,12 @@ impl CampaignDb {
 
         sqlx::query(
             r#"
-        INSERT INTO tokens (
-            id,
-            map_id,
-            character_id,
-            x,
-            y,
-            rotation,
-            is_visible
-        )
-        VALUES (?, ?, ?, ?, ?, 0, 1)
-        "#,
+            INSERT INTO tokens (
+                id, map_id, character_id, asset_id,
+                x, y, rotation, scale, is_visible, layer, version
+            )
+            VALUES (?, ?, ?, NULL, ?, ?, 0, 1.0, 1, 'default', 0)
+            "#,
         )
         .bind(&id)
         .bind(map_id)
@@ -275,10 +369,14 @@ impl CampaignDb {
             id,
             map_id: map_id.to_string(),
             character_id,
+            asset_id: None,
             x,
             y,
             rotation: 0.0,
+            scale: 1.0,
             is_visible: true,
+            layer: "default".to_string(),
+            version: 0,
             character_name: None,
         })
     }
@@ -290,28 +388,27 @@ impl CampaignDb {
                 String,
                 String,
                 Option<String>,
+                Option<String>,
                 f64,
                 f64,
                 f64,
+                f64,
+                i32,
+                String,
                 i32,
                 Option<String>,
             ),
         >(
             r#"
-        SELECT
-            t.id,
-            t.map_id,
-            t.character_id,
-            t.x,
-            t.y,
-            t.rotation,
-            t.is_visible,
-            c.name
-        FROM tokens t
-        LEFT JOIN characters c ON c.id = t.character_id
-        WHERE t.map_id = ?
-        ORDER BY t.rowid
-        "#,
+            SELECT
+                t.id, t.map_id, t.character_id, t.asset_id,
+                t.x, t.y, t.rotation, t.scale, t.is_visible, t.layer, t.version,
+                c.name
+            FROM tokens t
+            LEFT JOIN characters c ON c.id = t.character_id
+            WHERE t.map_id = ?
+            ORDER BY t.rowid
+            "#,
         )
         .bind(map_id)
         .fetch_all(&self.pool)
@@ -329,10 +426,10 @@ impl CampaignDb {
     ) -> Result<TokenSummary, AppError> {
         let result = sqlx::query(
             r#"
-        UPDATE tokens
-        SET x = ?, y = ?
-        WHERE id = ?
-        "#,
+            UPDATE tokens
+            SET x = ?, y = ?, version = version + 1
+            WHERE id = ?
+            "#,
         )
         .bind(x)
         .bind(y)
@@ -362,6 +459,44 @@ impl CampaignDb {
         Ok(())
     }
 
+    pub async fn assign_token_character(
+        &self,
+        token_id: &str,
+        character_id: Option<String>,
+    ) -> Result<TokenSummary, AppError> {
+        if let Some(character_id) = &character_id {
+            let character_exists =
+                sqlx::query_scalar::<_, String>("SELECT id FROM characters WHERE id = ?")
+                    .bind(character_id)
+                    .fetch_optional(&self.pool)
+                    .await
+                    .map_err(AppError::db)?;
+
+            if character_exists.is_none() {
+                return Err(AppError::NotFound);
+            }
+        }
+
+        let result = sqlx::query(
+            r#"
+            UPDATE tokens
+            SET character_id = ?
+            WHERE id = ?
+            "#,
+        )
+        .bind(&character_id)
+        .bind(token_id)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        self.fetch_token(token_id).await
+    }
+
     async fn fetch_token(&self, token_id: &str) -> Result<TokenSummary, AppError> {
         let row = sqlx::query_as::<
             _,
@@ -369,27 +504,26 @@ impl CampaignDb {
                 String,
                 String,
                 Option<String>,
+                Option<String>,
                 f64,
                 f64,
                 f64,
+                f64,
+                i32,
+                String,
                 i32,
                 Option<String>,
             ),
         >(
             r#"
-        SELECT
-            t.id,
-            t.map_id,
-            t.character_id,
-            t.x,
-            t.y,
-            t.rotation,
-            t.is_visible,
-            c.name
-        FROM tokens t
-        LEFT JOIN characters c ON c.id = t.character_id
-        WHERE t.id = ?
-        "#,
+            SELECT
+                t.id, t.map_id, t.character_id, t.asset_id,
+                t.x, t.y, t.rotation, t.scale, t.is_visible, t.layer, t.version,
+                c.name
+            FROM tokens t
+            LEFT JOIN characters c ON c.id = t.character_id
+            WHERE t.id = ?
+            "#,
         )
         .bind(token_id)
         .fetch_optional(&self.pool)
@@ -400,77 +534,9 @@ impl CampaignDb {
         Ok(row_to_token(row))
     }
 
-    pub async fn create_character(
-        &self,
-        name: &str,
-        character_type: &str,
-    ) -> Result<CharacterSummary, AppError> {
-        let name = name.trim().to_string();
-
-        if name.is_empty() {
-            return Err(AppError::Validation(
-                "Character name is required".to_string(),
-            ));
-        }
-
-        if character_type != "pc" && character_type != "npc" && character_type != "monster" {
-            return Err(AppError::Validation(
-                "Character type must be pc, npc or monster".to_string(),
-            ));
-        }
-
-        let id = uuid::Uuid::new_v4().to_string();
-
-        sqlx::query(
-            r#"
-        INSERT INTO characters (
-            id,
-            name,
-            type,
-            data_json
-        )
-        VALUES (?, ?, ?, ?)
-        "#,
-        )
-        .bind(&id)
-        .bind(&name)
-        .bind(character_type)
-        .bind("{}")
-        .execute(&self.pool)
-        .await
-        .map_err(AppError::db)?;
-
-        Ok(CharacterSummary {
-            id,
-            name,
-            character_type: character_type.to_string(),
-        })
-    }
-
-    pub async fn list_characters(&self) -> Result<Vec<CharacterSummary>, AppError> {
-        let rows = sqlx::query_as::<_, (String, String, String)>(
-            r#"
-        SELECT
-            id,
-            name,
-            type
-        FROM characters
-        ORDER BY name
-        "#,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(AppError::db)?;
-
-        Ok(rows
-            .into_iter()
-            .map(|(id, name, character_type)| CharacterSummary {
-                id,
-                name,
-                character_type,
-            })
-            .collect())
-    }
+    // ============================================
+    // journal_entries
+    // ============================================
 
     pub async fn create_journal_entry(
         &self,
@@ -487,24 +553,22 @@ impl CampaignDb {
 
         let folder_path = normalize_folder_path(folder_path);
         let id = uuid::Uuid::new_v4().to_string();
+        let now = now_unix();
 
         sqlx::query(
             r#"
-        INSERT INTO journal_entries (
-            id,
-            title,
-            content_markdown,
-            folder_path,
-            is_visible_to_players
-        )
-        VALUES (?, ?, ?, ?, ?)
-        "#,
+            INSERT INTO journal_entries (
+                id, title, content_markdown, folder_path, sort_order,
+                visibility, players_can_edit, created_at, updated_at, version
+            )
+            VALUES (?, ?, '', ?, 0, 'gm_only', 0, ?, ?, 0)
+            "#,
         )
         .bind(&id)
         .bind(&title)
-        .bind("")
         .bind(&folder_path)
-        .bind(0)
+        .bind(now)
+        .bind(now)
         .execute(&self.pool)
         .await
         .map_err(AppError::db)?;
@@ -513,21 +577,80 @@ impl CampaignDb {
             id,
             title,
             folder_path,
-            is_visible_to_players: false,
+            visibility: "gm_only".to_string(),
+            players_can_edit: false,
+            sort_order: 0,
         })
     }
 
-    pub async fn list_journal_entries(&self) -> Result<Vec<JournalEntrySummary>, AppError> {
-        let rows = sqlx::query_as::<_, (String, String, String, i32)>(
+    pub async fn get_journal_entry(
+        &self,
+        id: &str,
+    ) -> Result<Option<JournalEntryDetail>, AppError> {
+        let row = sqlx::query_as::<
+            _,
+            (
+                String,
+                String,
+                String,
+                String,
+                i32,
+                String,
+                i32,
+                i32,
+                i32,
+                i32,
+            ),
+        >(
             r#"
-        SELECT
-            id,
-            title,
-            folder_path,
-            is_visible_to_players
-        FROM journal_entries
-        ORDER BY folder_path, title
-        "#,
+            SELECT
+                id, title, content_markdown, folder_path, sort_order,
+                visibility, players_can_edit, created_at, updated_at, version
+            FROM journal_entries
+            WHERE id = ?
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(row.map(
+            |(
+                id,
+                title,
+                content_markdown,
+                folder_path,
+                sort_order,
+                visibility,
+                players_can_edit,
+                created_at,
+                updated_at,
+                version,
+            )| {
+                JournalEntryDetail {
+                    id,
+                    title,
+                    content_markdown,
+                    folder_path,
+                    visibility,
+                    players_can_edit: players_can_edit != 0,
+                    sort_order,
+                    created_at,
+                    updated_at,
+                    version,
+                }
+            },
+        ))
+    }
+
+    pub async fn list_journal_entries(&self) -> Result<Vec<JournalEntrySummary>, AppError> {
+        let rows = sqlx::query_as::<_, (String, String, String, String, i32, i32)>(
+            r#"
+            SELECT id, title, folder_path, visibility, players_can_edit, sort_order
+            FROM journal_entries
+            ORDER BY folder_path, sort_order, title
+            "#,
         )
         .fetch_all(&self.pool)
         .await
@@ -536,48 +659,18 @@ impl CampaignDb {
         Ok(rows
             .into_iter()
             .map(
-                |(id, title, folder_path, is_visible_to_players)| JournalEntrySummary {
-                    id,
-                    title,
-                    folder_path,
-                    is_visible_to_players: is_visible_to_players != 0,
+                |(id, title, folder_path, visibility, players_can_edit, sort_order)| {
+                    JournalEntrySummary {
+                        id,
+                        title,
+                        folder_path,
+                        visibility,
+                        players_can_edit: players_can_edit != 0,
+                        sort_order,
+                    }
                 },
             )
             .collect())
-    }
-
-    pub async fn get_journal_entry(
-        &self,
-        id: &str,
-    ) -> Result<Option<JournalEntryDetail>, AppError> {
-        let row = sqlx::query_as::<_, (String, String, String, String, i32)>(
-            r#"
-        SELECT
-            id,
-            title,
-            content_markdown,
-            folder_path,
-            is_visible_to_players
-        FROM journal_entries
-        WHERE id = ?
-        "#,
-        )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(AppError::db)?;
-
-        Ok(row.map(
-            |(id, title, content_markdown, folder_path, is_visible_to_players)| {
-                JournalEntryDetail {
-                    id,
-                    title,
-                    content_markdown,
-                    folder_path,
-                    is_visible_to_players: is_visible_to_players != 0,
-                }
-            },
-        ))
     }
 
     pub async fn update_journal_entry(
@@ -586,7 +679,8 @@ impl CampaignDb {
         title: &str,
         content_markdown: &str,
         folder_path: &str,
-        is_visible_to_players: bool,
+        visibility: &str,
+        players_can_edit: bool,
     ) -> Result<JournalEntryDetail, AppError> {
         let title = title.trim().to_string();
 
@@ -596,24 +690,36 @@ impl CampaignDb {
             ));
         }
 
+        if !["gm_only", "players", "public"].contains(&visibility) {
+            return Err(AppError::Validation(
+                "Visibility must be gm_only, players or public".to_string(),
+            ));
+        }
+
         let folder_path = normalize_folder_path(folder_path);
-        let visible = if is_visible_to_players { 1 } else { 0 };
+        let editable = if players_can_edit { 1 } else { 0 };
+        let now = now_unix();
 
         let result = sqlx::query(
             r#"
-        UPDATE journal_entries
-        SET
-            title = ?,
-            content_markdown = ?,
-            folder_path = ?,
-            is_visible_to_players = ?
-        WHERE id = ?
-        "#,
+            UPDATE journal_entries
+            SET
+                title = ?,
+                content_markdown = ?,
+                folder_path = ?,
+                visibility = ?,
+                players_can_edit = ?,
+                updated_at = ?,
+                version = version + 1
+            WHERE id = ?
+            "#,
         )
         .bind(&title)
         .bind(content_markdown)
         .bind(&folder_path)
-        .bind(visible)
+        .bind(visibility)
+        .bind(editable)
+        .bind(now)
         .bind(id)
         .execute(&self.pool)
         .await
@@ -640,31 +746,57 @@ impl CampaignDb {
         Ok(())
     }
 
-    pub async fn get_character(&self, id: &str) -> Result<Option<CharacterDetail>, AppError> {
-        let row = sqlx::query_as::<_, (String, String, String, String)>(
+    // ============================================
+    // characters
+    // ============================================
+
+    pub async fn create_character(
+        &self,
+        name: &str,
+        character_type: &str,
+    ) -> Result<CharacterSummary, AppError> {
+        let name = name.trim().to_string();
+
+        if name.is_empty() {
+            return Err(AppError::Validation(
+                "Character name is required".to_string(),
+            ));
+        }
+
+        if character_type != "pc" && character_type != "npc" && character_type != "monster" {
+            return Err(AppError::Validation(
+                "Character type must be pc, npc or monster".to_string(),
+            ));
+        }
+
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = now_unix();
+
+        sqlx::query(
             r#"
-        SELECT
-            id,
-            name,
-            type,
-            data_json
-        FROM characters
-        WHERE id = ?
-        "#,
+            INSERT INTO characters (
+                id, name, type, data_json, status,
+                created_at, updated_at, version
+            )
+            VALUES (?, ?, ?, ?, 'active', ?, ?, 0)
+            "#,
         )
-        .bind(id)
-        .fetch_optional(&self.pool)
+        .bind(&id)
+        .bind(&name)
+        .bind(character_type)
+        .bind("{}")
+        .bind(now)
+        .bind(now)
+        .execute(&self.pool)
         .await
         .map_err(AppError::db)?;
 
-        Ok(
-            row.map(|(id, name, character_type, data_json)| CharacterDetail {
-                id,
-                name,
-                character_type,
-                data_json,
-            }),
-        )
+        Ok(CharacterSummary {
+            id,
+            name,
+            character_type: character_type.to_string(),
+            status: "active".to_string(),
+        })
     }
 
     pub async fn update_character(
@@ -682,34 +814,22 @@ impl CampaignDb {
             ));
         }
 
-        if character_type != "pc" && character_type != "npc" && character_type != "monster" {
-            return Err(AppError::Validation(
-                "Character type must be pc, npc or monster".to_string(),
-            ));
-        }
-
-        let data_json = if data_json.trim().is_empty() {
-            "{}".to_string()
-        } else {
-            data_json.to_string()
-        };
-
-        serde_json::from_str::<serde_json::Value>(&data_json)
+        serde_json::from_str::<serde_json::Value>(data_json)
             .map_err(|_| AppError::Validation("data_json must be valid JSON".to_string()))?;
+
+        let now = now_unix();
 
         let result = sqlx::query(
             r#"
-        UPDATE characters
-        SET
-            name = ?,
-            type = ?,
-            data_json = ?
-        WHERE id = ?
-        "#,
+            UPDATE characters
+            SET name = ?, type = ?, data_json = ?, updated_at = ?, version = version + 1
+            WHERE id = ?
+            "#,
         )
         .bind(&name)
         .bind(character_type)
-        .bind(&data_json)
+        .bind(data_json)
+        .bind(now)
         .bind(id)
         .execute(&self.pool)
         .await
@@ -722,11 +842,90 @@ impl CampaignDb {
         self.get_character(id).await?.ok_or(AppError::NotFound)
     }
 
-    pub fn assets_dir(&self) -> std::path::PathBuf {
-        let parent = self
-            .path
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new(""));
+    pub async fn get_character(&self, id: &str) -> Result<Option<CharacterDetail>, AppError> {
+        let row = sqlx::query_as::<
+            _,
+            (
+                String,
+                String,
+                String,
+                String,
+                String,
+                Option<String>,
+                i32,
+                i32,
+                i32,
+            ),
+        >(
+            r#"
+            SELECT
+                id, name, type, data_json, status,
+                portrait_asset_id, created_at, updated_at, version
+            FROM characters
+            WHERE id = ?
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(row.map(
+            |(
+                id,
+                name,
+                character_type,
+                data_json,
+                status,
+                portrait_asset_id,
+                created_at,
+                updated_at,
+                version,
+            )| {
+                CharacterDetail {
+                    id,
+                    name,
+                    character_type,
+                    data_json,
+                    status,
+                    portrait_asset_id,
+                    created_at,
+                    updated_at,
+                    version,
+                }
+            },
+        ))
+    }
+
+    pub async fn list_characters(&self) -> Result<Vec<CharacterSummary>, AppError> {
+        let rows = sqlx::query_as::<_, (String, String, String, String)>(
+            r#"
+            SELECT id, name, type, status
+            FROM characters
+            ORDER BY name
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(id, name, character_type, status)| CharacterSummary {
+                id,
+                name,
+                character_type,
+                status,
+            })
+            .collect())
+    }
+
+    // ============================================
+    // assets (helpers)
+    // ============================================
+
+    pub fn assets_dir(&self) -> PathBuf {
+        let parent = self.path.parent().unwrap_or_else(|| Path::new(""));
 
         let stem = self
             .path
@@ -737,7 +936,7 @@ impl CampaignDb {
         parent.join(format!("{stem}.assets"))
     }
 
-    pub fn resolve_asset_path(&self, relative_path: &str) -> Result<std::path::PathBuf, AppError> {
+    pub fn resolve_asset_path(&self, relative_path: &str) -> Result<PathBuf, AppError> {
         let mut rel = relative_path.trim().trim_start_matches('/');
 
         if let Some(stripped) = rel.strip_prefix("assets/") {
@@ -751,101 +950,17 @@ impl CampaignDb {
         Ok(self.assets_dir().join(rel))
     }
 
-    pub async fn update_map_image_path(
-        &self,
-        map_id: &str,
-        image_path: &str,
-    ) -> Result<MapSummary, AppError> {
-        let result = sqlx::query(
-            r#"
-        UPDATE maps
-        SET image_path = ?
-        WHERE id = ?
-        "#,
-        )
-        .bind(image_path)
-        .bind(map_id)
-        .execute(&self.pool)
-        .await
-        .map_err(AppError::db)?;
-
-        if result.rows_affected() == 0 {
-            return Err(AppError::NotFound);
-        }
-
-        self.get_map(map_id).await?.ok_or(AppError::NotFound)
-    }
-
-    pub async fn assign_token_character(
-        &self,
-        token_id: &str,
-        character_id: Option<String>,
-    ) -> Result<TokenSummary, AppError> {
-        if let Some(character_id) = &character_id {
-            let character_exists =
-                sqlx::query_scalar::<_, String>("SELECT id FROM characters WHERE id = ?")
-                    .bind(character_id)
-                    .fetch_optional(&self.pool)
-                    .await
-                    .map_err(AppError::db)?;
-
-            if character_exists.is_none() {
-                return Err(AppError::NotFound);
-            }
-        }
-
-        let result = sqlx::query(
-            r#"
-        UPDATE tokens
-        SET character_id = ?
-        WHERE id = ?
-        "#,
-        )
-        .bind(&character_id)
-        .bind(token_id)
-        .execute(&self.pool)
-        .await
-        .map_err(AppError::db)?;
-
-        if result.rows_affected() == 0 {
-            return Err(AppError::NotFound);
-        }
-
-        self.fetch_token(token_id).await
-    }
-
-    pub async fn update_map_fog(
-        &self,
-        map_id: &str,
-        fog_data: Option<String>,
-    ) -> Result<(), AppError> {
-        let result = sqlx::query(
-            r#"
-        UPDATE maps
-        SET fog_data = ?
-        WHERE id = ?
-        "#,
-        )
-        .bind(&fog_data)
-        .bind(map_id)
-        .execute(&self.pool)
-        .await
-        .map_err(AppError::db)?;
-
-        if result.rows_affected() == 0 {
-            return Err(AppError::NotFound);
-        }
-
-        Ok(())
-    }
+    // ============================================
+    // compendiums
+    // ============================================
 
     pub async fn list_compendiums(&self) -> Result<Vec<CompendiumSummary>, AppError> {
-        let rows = sqlx::query_as::<_, (String, String, Option<String>, String)>(
+        let rows = sqlx::query_as::<_, (String, String, Option<String>, String, String)>(
             r#"
-        SELECT id, name, source_plugin_id, type
-        FROM compendiums
-        ORDER BY name
-        "#,
+            SELECT id, name, source_plugin_id, type, version
+            FROM compendiums
+            ORDER BY name
+            "#,
         )
         .fetch_all(&self.pool)
         .await
@@ -853,12 +968,15 @@ impl CampaignDb {
 
         Ok(rows
             .into_iter()
-            .map(|(id, name, source_plugin_id, r#type)| CompendiumSummary {
-                id,
-                name,
-                source_plugin_id,
-                r#type,
-            })
+            .map(
+                |(id, name, source_plugin_id, r#type, version)| CompendiumSummary {
+                    id,
+                    name,
+                    source_plugin_id,
+                    r#type,
+                    version,
+                },
+            )
             .collect())
     }
 
@@ -868,11 +986,11 @@ impl CampaignDb {
     ) -> Result<Vec<CompendiumEntrySummary>, AppError> {
         let rows = sqlx::query_as::<_, (String, String, String, String, String)>(
             r#"
-        SELECT id, compendium_id, entry_key, name, data_json
-        FROM compendium_entries
-        WHERE compendium_id = ?
-        ORDER BY name
-        "#,
+            SELECT id, compendium_id, entry_key, name, data_json
+            FROM compendium_entries
+            WHERE compendium_id = ?
+            ORDER BY name
+            "#,
         )
         .bind(compendium_id)
         .fetch_all(&self.pool)
@@ -910,9 +1028,9 @@ impl CampaignDb {
 
         sqlx::query(
             r#"
-        INSERT INTO compendiums (id, name, source_plugin_id, type)
-        VALUES (?, ?, NULL, ?)
-        "#,
+            INSERT INTO compendiums (id, name, source_plugin_id, type, version)
+            VALUES (?, ?, NULL, ?, '1.0.0')
+            "#,
         )
         .bind(&id)
         .bind(&name)
@@ -926,6 +1044,7 @@ impl CampaignDb {
             name,
             source_plugin_id: None,
             r#type: compendium_type.to_string(),
+            version: "1.0.0".to_string(),
         })
     }
 
@@ -946,9 +1065,9 @@ impl CampaignDb {
 
         sqlx::query(
             r#"
-        INSERT INTO compendium_entries (id, compendium_id, entry_key, name, data_json)
-        VALUES (?, ?, ?, ?, ?)
-        "#,
+            INSERT INTO compendium_entries (id, compendium_id, entry_key, name, data_json)
+            VALUES (?, ?, ?, ?, ?)
+            "#,
         )
         .bind(&id)
         .bind(compendium_id)
@@ -984,10 +1103,10 @@ impl CampaignDb {
 
         let result = sqlx::query(
             r#"
-        UPDATE compendiums
-        SET name = ?, type = ?
-        WHERE id = ?
-        "#,
+            UPDATE compendiums
+            SET name = ?, type = ?
+            WHERE id = ?
+            "#,
         )
         .bind(&name)
         .bind(compendium_type)
@@ -1000,11 +1119,21 @@ impl CampaignDb {
             return Err(AppError::NotFound);
         }
 
+        // Возвращаем обновлённый компендий с его текущей версией
+        let existing =
+            sqlx::query_as::<_, (String,)>("SELECT version FROM compendiums WHERE id = ?")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(AppError::db)?
+                .ok_or(AppError::NotFound)?;
+
         Ok(CompendiumSummary {
             id: id.to_string(),
             name,
             source_plugin_id: None,
             r#type: compendium_type.to_string(),
+            version: existing.0,
         })
     }
 
@@ -1034,17 +1163,15 @@ impl CampaignDb {
             return Err(AppError::Validation("Entry name is required".to_string()));
         }
 
-        // Валидация JSON
         serde_json::from_str::<serde_json::Value>(data_json)
             .map_err(|_| AppError::Validation("data_json must be valid JSON".to_string()))?;
 
-        // Сначала получаем текущую запись, чтобы вернуть полные данные
         let existing = sqlx::query_as::<_, (String, String, String, String, String)>(
             r#"
-        SELECT id, compendium_id, entry_key, name, data_json
-        FROM compendium_entries
-        WHERE id = ?
-        "#,
+            SELECT id, compendium_id, entry_key, name, data_json
+            FROM compendium_entries
+            WHERE id = ?
+            "#,
         )
         .bind(id)
         .fetch_optional(&self.pool)
@@ -1054,10 +1181,10 @@ impl CampaignDb {
 
         sqlx::query(
             r#"
-        UPDATE compendium_entries
-        SET name = ?, data_json = ?
-        WHERE id = ?
-        "#,
+            UPDATE compendium_entries
+            SET name = ?, data_json = ?
+            WHERE id = ?
+            "#,
         )
         .bind(&name)
         .bind(data_json)
@@ -1089,6 +1216,10 @@ impl CampaignDb {
         Ok(())
     }
 
+    // ============================================
+    // plugins
+    // ============================================
+
     pub async fn upsert_installed_plugin(
         &self,
         plugin_id: &str,
@@ -1097,26 +1228,25 @@ impl CampaignDb {
         manifest_json: &str,
     ) -> Result<(), AppError> {
         let active = if is_active { 1 } else { 0 };
+        let now = now_unix();
 
         sqlx::query(
             r#"
-        INSERT INTO installed_plugins (
-            plugin_id,
-            version,
-            is_active,
-            config_json
-        )
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(plugin_id) DO UPDATE SET
-            version = excluded.version,
-            is_active = excluded.is_active,
-            config_json = excluded.config_json
-        "#,
+            INSERT INTO installed_plugins (
+                plugin_id, version, is_active, config_json, installed_at
+            )
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(plugin_id) DO UPDATE SET
+                version = excluded.version,
+                is_active = excluded.is_active,
+                config_json = excluded.config_json
+            "#,
         )
         .bind(plugin_id)
         .bind(version)
         .bind(active)
         .bind(manifest_json)
+        .bind(now)
         .execute(&self.pool)
         .await
         .map_err(AppError::db)?;
@@ -1125,16 +1255,12 @@ impl CampaignDb {
     }
 
     pub async fn list_installed_plugins(&self) -> Result<Vec<InstalledPluginSummary>, AppError> {
-        let rows = sqlx::query_as::<_, (String, String, i32, String)>(
+        let rows = sqlx::query_as::<_, (String, String, i32, String, i32, Option<String>)>(
             r#"
-        SELECT
-            plugin_id,
-            version,
-            is_active,
-            config_json
-        FROM installed_plugins
-        ORDER BY plugin_id
-        "#,
+            SELECT plugin_id, version, is_active, config_json, installed_at, compat_warning
+            FROM installed_plugins
+            ORDER BY plugin_id
+            "#,
         )
         .fetch_all(&self.pool)
         .await
@@ -1143,11 +1269,15 @@ impl CampaignDb {
         Ok(rows
             .into_iter()
             .map(
-                |(plugin_id, version, is_active, manifest_json)| InstalledPluginSummary {
-                    plugin_id,
-                    version,
-                    is_active: is_active != 0,
-                    manifest_json,
+                |(plugin_id, version, is_active, manifest_json, installed_at, compat_warning)| {
+                    InstalledPluginSummary {
+                        plugin_id,
+                        version,
+                        is_active: is_active != 0,
+                        manifest_json,
+                        installed_at,
+                        compat_warning,
+                    }
                 },
             )
             .collect())
@@ -1157,16 +1287,12 @@ impl CampaignDb {
         &self,
         plugin_id: &str,
     ) -> Result<Option<InstalledPluginSummary>, AppError> {
-        let row = sqlx::query_as::<_, (String, String, i32, String)>(
+        let row = sqlx::query_as::<_, (String, String, i32, String, i32, Option<String>)>(
             r#"
-        SELECT
-            plugin_id,
-            version,
-            is_active,
-            config_json
-        FROM installed_plugins
-        WHERE plugin_id = ?
-        "#,
+            SELECT plugin_id, version, is_active, config_json, installed_at, compat_warning
+            FROM installed_plugins
+            WHERE plugin_id = ?
+            "#,
         )
         .bind(plugin_id)
         .fetch_optional(&self.pool)
@@ -1174,11 +1300,15 @@ impl CampaignDb {
         .map_err(AppError::db)?;
 
         Ok(row.map(
-            |(plugin_id, version, is_active, manifest_json)| InstalledPluginSummary {
-                plugin_id,
-                version,
-                is_active: is_active != 0,
-                manifest_json,
+            |(plugin_id, version, is_active, manifest_json, installed_at, compat_warning)| {
+                InstalledPluginSummary {
+                    plugin_id,
+                    version,
+                    is_active: is_active != 0,
+                    manifest_json,
+                    installed_at,
+                    compat_warning,
+                }
             },
         ))
     }
@@ -1192,10 +1322,10 @@ impl CampaignDb {
 
         let result = sqlx::query(
             r#"
-        UPDATE installed_plugins
-        SET is_active = ?
-        WHERE plugin_id = ?
-        "#,
+            UPDATE installed_plugins
+            SET is_active = ?
+            WHERE plugin_id = ?
+            "#,
         )
         .bind(active)
         .bind(plugin_id)
@@ -1212,27 +1342,23 @@ impl CampaignDb {
             .ok_or(AppError::NotFound)
     }
 
-    /// Импорт компендия из плагина.
-    /// Создаёт компендий с source_plugin_id и импортирует записи.
     pub async fn import_compendium_from_plugin(
         &self,
         plugin_id: &str,
-        compendium_key: &str,
+        _compendium_key: &str,
         name: &str,
         compendium_type: &str,
         entries: &[dnd_core::PluginCompendiumEntry],
     ) -> Result<CompendiumSummary, AppError> {
         let id = uuid::Uuid::new_v4().to_string();
 
+        // Удаляем старые компендии этого плагина
         sqlx::query(
             r#"
-        DELETE FROM compendiums
-        WHERE source_plugin_id = ? AND id IN (
-            SELECT id FROM compendiums WHERE source_plugin_id = ?
+            DELETE FROM compendiums
+            WHERE source_plugin_id = ?
+            "#,
         )
-        "#,
-        )
-        .bind(plugin_id)
         .bind(plugin_id)
         .execute(&self.pool)
         .await
@@ -1240,9 +1366,9 @@ impl CampaignDb {
 
         sqlx::query(
             r#"
-        INSERT INTO compendiums (id, name, source_plugin_id, type)
-        VALUES (?, ?, ?, ?)
-        "#,
+            INSERT INTO compendiums (id, name, source_plugin_id, type, version)
+            VALUES (?, ?, ?, ?, '1.0.0')
+            "#,
         )
         .bind(&id)
         .bind(name)
@@ -1258,12 +1384,12 @@ impl CampaignDb {
 
             sqlx::query(
                 r#"
-            INSERT INTO compendium_entries (id, compendium_id, entry_key, name, data_json)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(compendium_id, entry_key) DO UPDATE SET
-                name = excluded.name,
-                data_json = excluded.data_json
-            "#,
+                INSERT INTO compendium_entries (id, compendium_id, entry_key, name, data_json)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(compendium_id, entry_key) DO UPDATE SET
+                    name = excluded.name,
+                    data_json = excluded.data_json
+                "#,
             )
             .bind(&entry_id)
             .bind(&id)
@@ -1280,10 +1406,10 @@ impl CampaignDb {
             name: name.to_string(),
             source_plugin_id: Some(plugin_id.to_string()),
             r#type: compendium_type.to_string(),
+            version: "1.0.0".to_string(),
         })
     }
 
-    /// Удаляет все компендии, связанные с плагином.
     pub async fn delete_compendiums_by_plugin(&self, plugin_id: &str) -> Result<u64, AppError> {
         let result = sqlx::query("DELETE FROM compendiums WHERE source_plugin_id = ?")
             .bind(plugin_id)
@@ -1294,7 +1420,6 @@ impl CampaignDb {
         Ok(result.rows_affected())
     }
 
-    /// Удаляет плагин из installed_plugins.
     pub async fn delete_installed_plugin(&self, plugin_id: &str) -> Result<(), AppError> {
         let result = sqlx::query("DELETE FROM installed_plugins WHERE plugin_id = ?")
             .bind(plugin_id)
@@ -1308,7 +1433,149 @@ impl CampaignDb {
 
         Ok(())
     }
+
+    // ============================================
+    // journal_links
+    // ============================================
+
+    pub async fn list_journal_links(
+        &self,
+        entry_id: &str,
+    ) -> Result<Vec<JournalLinkSummary>, AppError> {
+        let rows = sqlx::query_as::<
+            _,
+            (
+                String,
+                String,
+                String,
+                String,
+                String,
+                i32,
+                f64,
+                Option<String>,
+                i32,
+            ),
+        >(
+            r#"
+            SELECT
+                id,
+                source_entry_id,
+                target_type,
+                target_id,
+                link_type,
+                is_directed,
+                weight,
+                label,
+                is_visible_to_players
+            FROM journal_links
+            WHERE source_entry_id = ? OR target_id = ?
+            ORDER BY link_type, label
+            "#,
+        )
+        .bind(entry_id)
+        .bind(entry_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    id,
+                    source_entry_id,
+                    target_type,
+                    target_id,
+                    link_type,
+                    is_directed,
+                    weight,
+                    label,
+                    is_visible_to_players,
+                )| {
+                    JournalLinkSummary {
+                        id,
+                        source_entry_id,
+                        target_type,
+                        target_id,
+                        link_type,
+                        is_directed: is_directed != 0,
+                        weight,
+                        label,
+                        is_visible_to_players: is_visible_to_players != 0,
+                    }
+                },
+            )
+            .collect())
+    }
+
+    pub async fn create_journal_link(
+        &self,
+        source_entry_id: &str,
+        target_type: &str,
+        target_id: &str,
+        link_type: &str,
+        is_directed: bool,
+        label: Option<String>,
+    ) -> Result<JournalLinkSummary, AppError> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let directed = if is_directed { 1 } else { 0 };
+        let now = now_unix();
+
+        sqlx::query(
+            r#"
+            INSERT INTO journal_links (
+                id, source_entry_id, target_type, target_id,
+                link_type, is_directed, weight, label,
+                metadata_json, is_visible_to_players,
+                created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, 1.0, ?, NULL, 0, ?, ?)
+            "#,
+        )
+        .bind(&id)
+        .bind(source_entry_id)
+        .bind(target_type)
+        .bind(target_id)
+        .bind(link_type)
+        .bind(directed)
+        .bind(&label)
+        .bind(now)
+        .bind(now)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(JournalLinkSummary {
+            id,
+            source_entry_id: source_entry_id.to_string(),
+            target_type: target_type.to_string(),
+            target_id: target_id.to_string(),
+            link_type: link_type.to_string(),
+            is_directed,
+            weight: 1.0,
+            label,
+            is_visible_to_players: false,
+        })
+    }
+
+    pub async fn delete_journal_link(&self, id: &str) -> Result<(), AppError> {
+        let result = sqlx::query("DELETE FROM journal_links WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(AppError::db)?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound);
+        }
+
+        Ok(())
+    }
 }
+
+// ============================================
+// Вспомогательные функции
+// ============================================
 
 async fn connect(path: &Path, create_if_missing: bool) -> Result<SqlitePool, AppError> {
     let options = SqliteConnectOptions::new()
@@ -1332,32 +1599,6 @@ async fn connect(path: &Path, create_if_missing: bool) -> Result<SqlitePool, App
         .map_err(AppError::db)?;
 
     Ok(pool)
-}
-
-fn row_to_token(
-    row: (
-        String,
-        String,
-        Option<String>,
-        f64,
-        f64,
-        f64,
-        i32,
-        Option<String>,
-    ),
-) -> TokenSummary {
-    let (id, map_id, character_id, x, y, rotation, is_visible, character_name) = row;
-
-    TokenSummary {
-        id,
-        map_id,
-        character_id,
-        x,
-        y,
-        rotation,
-        is_visible: is_visible != 0,
-        character_name,
-    }
 }
 
 fn normalize_folder_path(path: &str) -> String {
@@ -1386,6 +1627,113 @@ pub fn now_unix() -> i32 {
         .unwrap_or_default()
         .as_secs() as i32
 }
+
+fn row_to_map(
+    row: (
+        String,
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        i32,
+        f64,
+        f64,
+        f64,
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
+        Option<Vec<u8>>,
+    ),
+) -> MapSummary {
+    let (
+        id,
+        world_id,
+        name,
+        asset_id,
+        image_path,
+        grid_size,
+        grid_offset_x,
+        grid_offset_y,
+        scale,
+        width,
+        height,
+        sort_order,
+        is_visible_to_players,
+        version,
+        fog_data,
+    ) = row;
+
+    MapSummary {
+        id,
+        world_id,
+        name,
+        asset_id,
+        image_path,
+        grid_size,
+        grid_offset_x,
+        grid_offset_y,
+        scale,
+        width,
+        height,
+        sort_order,
+        is_visible_to_players: is_visible_to_players != 0,
+        version,
+        fog_data: fog_data.map(|_| "binary".to_string()),
+    }
+}
+
+fn row_to_token(
+    row: (
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        f64,
+        f64,
+        f64,
+        f64,
+        i32,
+        String,
+        i32,
+        Option<String>,
+    ),
+) -> TokenSummary {
+    let (
+        id,
+        map_id,
+        character_id,
+        asset_id,
+        x,
+        y,
+        rotation,
+        scale,
+        is_visible,
+        layer,
+        version,
+        character_name,
+    ) = row;
+
+    TokenSummary {
+        id,
+        map_id,
+        character_id,
+        asset_id,
+        x,
+        y,
+        rotation,
+        scale,
+        is_visible: is_visible != 0,
+        layer,
+        version,
+        character_name,
+    }
+}
+
+// ============================================
+// CampaignIndexStore
+// ============================================
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct IndexFile {

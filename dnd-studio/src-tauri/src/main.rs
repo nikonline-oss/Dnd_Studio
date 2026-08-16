@@ -14,14 +14,15 @@ use commands::compendiums::{
 };
 use commands::journal::{
     create_journal_entry, delete_journal_entry, get_journal_entry, list_journal_entries,
-    update_journal_entry,
+    update_journal_entry, list_journal_links, create_journal_link, delete_journal_link
 };
 use commands::maps::{
     create_map, get_map, import_map_image, list_maps, read_campaign_asset_data_url, update_map_fog,
 };
 use commands::plugins::{
     get_plugin_sheet, get_plugin_theme_css, install_plugin_from_file, list_installed_plugins,
-    list_plugin_sheets, list_plugin_themes, set_plugin_active, uninstall_plugin,
+    list_plugin_sheets, list_plugin_themes, set_plugin_active, uninstall_plugin, list_link_types,
+    install_builtin_plugin
 };
 use commands::tokens::{
     assign_token_character, create_token, delete_token, list_tokens, move_token,
@@ -77,7 +78,12 @@ fn main() {
             get_plugin_sheet,
             list_plugin_sheets,
             list_plugin_themes,
-            get_plugin_theme_css
+            get_plugin_theme_css,
+            list_link_types,
+            list_journal_links,
+            create_journal_link,
+            delete_journal_link,
+            install_builtin_plugin
         ]);
 
     #[cfg(debug_assertions)]

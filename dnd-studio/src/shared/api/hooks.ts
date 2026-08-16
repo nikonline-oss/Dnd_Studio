@@ -18,6 +18,8 @@ function invalidatePluginRelatedData(queryClient: QueryClient) {
   // Компендии, которые могли прийти из плагинов
   queryClient.invalidateQueries({ queryKey: ['compendiums'] });
   queryClient.invalidateQueries({ queryKey: ['compendiumEntries'] });
+  
+  queryClient.invalidateQueries({ queryKey: ['linkTypes'] });
 }
 
 async function unwrap<T, E extends { kind: string; message?: string }>(
@@ -372,13 +374,15 @@ export function useUpdateJournalEntry() {
       title,
       contentMarkdown,
       folderPath,
-      isVisibleToPlayers,
+      visibility,
+      playersCanEdit,
     }: {
       id: string;
       title: string;
       contentMarkdown: string;
       folderPath: string;
-      isVisibleToPlayers: boolean;
+      visibility: string;
+      playersCanEdit: boolean;
     }) =>
       unwrap(
         commands.updateJournalEntry(
@@ -386,11 +390,12 @@ export function useUpdateJournalEntry() {
           title,
           contentMarkdown,
           folderPath,
-          isVisibleToPlayers,
+          visibility,
+          playersCanEdit,
         ),
       ),
 
-    onSuccess: (_, variables) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
       queryClient.invalidateQueries({
         queryKey: ['journalEntry', variables.id],
@@ -844,5 +849,104 @@ export function usePluginThemeCss(pluginId?: string, themeKey?: string) {
     queryFn: () => unwrap(commands.getPluginThemeCss(pluginId!, themeKey!)),
     enabled: Boolean(pluginId && themeKey),
     retry: false,
+  });
+}
+
+export function useJournalLinks(entryId?: string) {
+  return useQuery({
+    queryKey: ['journalLinks', entryId],
+    queryFn: () => unwrap(commands.listJournalLinks(entryId!)),
+    enabled: Boolean(entryId),
+    retry: false,
+  });
+}
+
+export function useCreateJournalLink() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sourceEntryId,
+      targetType,
+      targetId,
+      linkType,
+      isDirected,
+      label,
+    }: {
+      sourceEntryId: string;
+      targetType: string;
+      targetId: string;
+      linkType: string;
+      isDirected: boolean;
+      label?: string | null;
+    }) =>
+      unwrap(
+        commands.createJournalLink(
+          sourceEntryId,
+          targetType,
+          targetId,
+          linkType,
+          isDirected,
+          label ?? null,
+        ),
+      ),
+
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['journalLinks', variables.sourceEntryId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['journalLinks', variables.targetId],
+      });
+    },
+
+    onError: (error) => {
+      logError('api', 'create journal link failed', error);
+    },
+  });
+}
+
+export function useDeleteJournalLink() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, entryId }: { id: string; entryId: string }) =>
+      unwrap(commands.deleteJournalLink(id)),
+
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['journalLinks', variables.entryId],
+      });
+    },
+
+    onError: (error) => {
+      logError('api', 'delete journal link failed', error);
+    },
+  });
+}
+
+export function useLinkTypes(enabled: boolean = true) {
+  return useQuery({
+    queryKey: ['linkTypes'],
+    queryFn: () => unwrap(commands.listLinkTypes()),
+    enabled,
+    retry: false,
+  });
+}
+
+export function useInstallBuiltinPlugin() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (pluginName: string) =>
+      unwrap(commands.installBuiltinPlugin(pluginName)),
+
+    onSuccess: () => {
+      invalidatePluginRelatedData(queryClient);
+    },
+
+    onError: (error) => {
+      logError('api', 'install builtin plugin failed', error);
+    },
   });
 }

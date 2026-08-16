@@ -1,12 +1,13 @@
 use crate::commands::require_db;
 use crate::state::{AppPaths, AppState};
 use dnd_core::{
-    AppError, InstalledPluginSummary, PluginCompendiumFile, PluginManifest, PluginSheetInfo, PluginThemeInfo,
+    AppError, InstalledPluginSummary, LinkTypeInfo, PluginCompendiumFile, PluginManifest,
+    PluginSheetInfo, PluginThemeInfo,
 };
 use std::fs;
 use std::io::Read;
 use std::path::Path;
-use tauri::State;
+use tauri::{Manager, State};
 use zip::ZipArchive;
 
 fn validate_plugin_id(id: &str) -> Result<(), AppError> {
@@ -429,4 +430,193 @@ pub async fn get_plugin_theme_css(
     let content = fs::read_to_string(&file_path).map_err(AppError::io)?;
 
     Ok(content)
+}
+
+/// Возвращает все доступные типы связей: встроенные + из активных плагинов.
+#[tauri::command]
+#[specta::specta]
+pub async fn list_link_types(state: State<'_, AppState>) -> Result<Vec<LinkTypeInfo>, AppError> {
+    let db = require_db(&state.campaign).await?;
+
+    // Встроенные типы связей
+    let mut link_types: Vec<LinkTypeInfo> = vec![
+        LinkTypeInfo {
+            key: "reference".to_string(),
+            label: "Reference".to_string(),
+            directed: true,
+            color: None,
+            source_plugin_id: None,
+        },
+        LinkTypeInfo {
+            key: "related".to_string(),
+            label: "Related".to_string(),
+            directed: false,
+            color: None,
+            source_plugin_id: None,
+        },
+        LinkTypeInfo {
+            key: "parent".to_string(),
+            label: "Parent".to_string(),
+            directed: true,
+            color: None,
+            source_plugin_id: None,
+        },
+        LinkTypeInfo {
+            key: "child".to_string(),
+            label: "Child".to_string(),
+            directed: true,
+            color: None,
+            source_plugin_id: None,
+        },
+    ];
+
+    // Типы связей из активных плагинов
+    let plugins = db.list_installed_plugins().await?;
+
+    for plugin in plugins {
+        if !plugin.is_active {
+            continue;
+        }
+
+        let manifest: PluginManifest =
+            serde_json::from_str(&plugin.manifest_json).map_err(AppError::io)?;
+
+        for lt in &manifest.link_types {
+            link_types.push(LinkTypeInfo {
+                key: lt.key.clone(),
+                label: lt.label.clone().unwrap_or_else(|| lt.key.clone()),
+                directed: lt.directed,
+                color: lt.color.clone(),
+                source_plugin_id: Some(plugin.plugin_id.clone()),
+            });
+        }
+    }
+
+    Ok(link_types)
+}
+
+/// Устанавливает встроенный плагин из ресурсов приложения.
+#[tauri::command]
+#[specta::specta]
+pub async fn install_builtin_plugin(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    paths: State<'_, AppPaths>,
+    plugin_name: String,
+) -> Result<InstalledPluginSummary, AppError> {
+    let db = require_db(&state.campaign).await?;
+
+    if plugin_name.is_empty()
+        || plugin_name.contains('/')
+        || plugin_name.contains('\\')
+        || plugin_name.contains("..")
+    {
+        return Err(AppError::Validation("Invalid plugin name".to_string()));
+    }
+
+    // let resource_dir = app
+    //     .path()
+    //     .resource_dir()
+    //     .map_err(|e| AppError::Io(format!("Failed to get resource dir: {e}")))?;
+
+    // let resource_path = resource_dir
+    //     .join("resources")
+    //     .join("builtin-plugins")
+    //     .join(format!("{}.dndplugin", plugin_name));
+
+    // if !resource_path.exists() {
+    //     return Err(AppError::Validation(format!(
+    //         "Builtin plugin '{}' not found",
+    //         plugin_name
+    //     )));
+    // }
+    let resource_path = if cfg!(debug_assertions) {
+        // В dev-режиме читаем из исходников
+        std::path::PathBuf::from("resources/builtin-plugins")
+            .join(format!("{}.dndplugin", plugin_name))
+    } else {
+        // В release читаем из bundle
+        let resource_dir = app
+            .path()
+            .resource_dir()
+            .map_err(|e| AppError::Io(format!("Failed to get resource dir: {e}")))?;
+
+        resource_dir
+            .join("resources")
+            .join("builtin-plugins")
+            .join(format!("{}.dndplugin", plugin_name))
+    };
+
+    let resource_bytes = fs::read(&resource_path).map_err(AppError::io)?;
+
+    let cursor = std::io::Cursor::new(resource_bytes);
+    let mut archive = ZipArchive::new(cursor)
+        .map_err(|_| AppError::Validation("Invalid builtin plugin archive".to_string()))?;
+
+    let manifest = {
+        let mut manifest_file = archive
+            .by_name("plugin.yaml")
+            .map_err(|_| AppError::Validation("plugin.yaml not found".to_string()))?;
+
+        let mut manifest_text = String::new();
+
+        manifest_file
+            .read_to_string(&mut manifest_text)
+            .map_err(AppError::io)?;
+
+        serde_yaml::from_str::<PluginManifest>(&manifest_text)
+            .map_err(|e| AppError::Validation(format!("Invalid plugin.yaml: {e}")))?
+    };
+
+    validate_plugin_id(&manifest.id)?;
+    validate_plugin_version(&manifest.version)?;
+
+    let manifest_json = serde_json::to_string(&manifest).map_err(AppError::io)?;
+
+    let plugin_root = paths
+        .data_dir
+        .join("plugins")
+        .join(&manifest.id)
+        .join(&manifest.version);
+
+    fs::create_dir_all(&plugin_root).map_err(AppError::io)?;
+
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).map_err(AppError::io)?;
+
+        let Some(relative_path) = entry.enclosed_name() else {
+            return Err(AppError::Validation(
+                "Plugin archive contains unsafe path".to_string(),
+            ));
+        };
+
+        if relative_path.to_string_lossy().is_empty() {
+            continue;
+        }
+
+        let destination = plugin_root.join(relative_path);
+
+        if entry.is_dir() {
+            fs::create_dir_all(&destination).map_err(AppError::io)?;
+            continue;
+        }
+
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent).map_err(AppError::io)?;
+        }
+
+        let mut bytes = Vec::new();
+        entry.read_to_end(&mut bytes).map_err(AppError::io)?;
+
+        fs::write(&destination, &bytes).map_err(AppError::io)?;
+    }
+
+    import_plugin_compendiums(&db, &plugin_root, &manifest).await?;
+
+    db.upsert_installed_plugin(&manifest.id, &manifest.version, true, &manifest_json)
+        .await?;
+
+    db.get_installed_plugin(&manifest.id)
+        .await?
+        .ok_or(AppError::NotFound)
 }

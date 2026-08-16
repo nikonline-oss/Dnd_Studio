@@ -1,0 +1,164 @@
+{
+  "entries": [
+    {
+      "key": "goblin",
+      "name": "Goblin",
+      "data": {
+        "hp": 7,
+        "ac": 15,
+        "speed": 30,
+        "cr": "1/4",
+        "size": "Small",
+        "type": "Humanoid",
+        "alignment": "Neutral Evil",
+        "str": 8,
+        "dex": 14,
+        "con": 10,
+        "int": 10,
+        "wis": 8,
+        "cha": 8,
+        "description": "A small, black-eyed, ill-featured humanoid prone to bullying the weak."
+      }
+    },
+    {
+      "key": "orc",
+      "name": "Orc",
+      "data": {
+        "hp": 15,
+        "ac": 13,
+        "speed": 30,
+        "cr": "1/2",
+        "size": "Medium",
+        "type": "Humanoid",
+        "alignment": "Chaotic Evil",
+        "str": 16,
+        "dex": 12,
+        "con": 16,
+        "int": 7,
+        "wis": 11,
+        "cha": 10,
+        "description": "A brutal raider who revels in close-quarters combat."
+      }
+    },
+    {
+      "key": "skeleton",
+      "name": "Skeleton",
+      "data": {
+        "hp": 13,
+        "ac": 13,
+        "speed": 30,
+        "cr": "1/4",
+        "size": "Medium",
+        "type": "Undead",
+        "alignment": "Lawful Evil",
+        "str": 10,
+        "dex": 14,
+        "con": 15,
+        "int": 6,
+        "wis": 8,
+        "cha": 5,
+        "description": "Animated bones held together by necromantic magic."
+      }
+    },
+    {
+      "key": "zombie",
+      "name": "Zombie",
+      "data": {
+        "hp": 22,
+        "ac": 8,
+        "speed": 20,
+        "cr": "1/4",
+        "size": "Medium",
+        "type": "Undead",
+        "alignment": "Neutral Evil",
+        "str": 13,
+        "dex": 6,
+        "con": 16,
+        "int": 3,
+        "wis": 6,
+        "cha": 5,
+        "description": "A rotting corpse animated by dark magic, driven only by hunger."
+      }
+    },
+    {
+      "key": "wolf",
+      "name": "Wolf",
+      "data": {
+        "hp": 11,
+        "ac": 13,
+        "speed": 40,
+        "cr": "1/4",
+        "size": "Medium",
+        "type": "Beast",
+        "alignment": "Unaligned",
+        "str": 12,
+        "dex": 15,
+        "con": 12,
+        "int": 3,
+        "wis": 12,
+        "cha": 6,
+        "description": "A wild canine that hunts in packs."
+      }
+    },
+    {
+      "key": "giant-spider",
+      "name": "Giant Spider",
+      "data": {
+        "hp": 26,
+        "ac": 14,
+        "speed": 30,
+        "cr": "1",
+        "size": "Large",
+        "type": "Beast",
+        "alignment": "Unaligned",
+        "str": 14,
+        "dex": 16,
+        "con": 12,
+        "int": 2,
+        "wis": 11,
+        "cha": 4,
+        "description": "A massive arachnid that spins webs to trap its prey."
+      }
+    },
+    {
+      "key": "bandit",
+      "name": "Bandit",
+      "data": {
+        "hp": 11,
+        "ac": 12,
+        "speed": 30,
+        "cr": "1/8",
+        "size": "Medium",
+        "type": "Humanoid",
+        "alignment": "Any Non-Lawful",
+        "str": 11,
+        "dex": 12,
+        "con": 12,
+        "int": 10,
+        "wis": 10,
+        "cha": 10,
+        "description": "A common criminal who robs travelers on the road."
+      }
+    },
+    {
+      "key": "commoner",
+      "name": "Commoner",
+      "data": {
+        "hp": 4,
+        "ac": 10,
+        "speed": 30,
+        "cr": "0",
+        "size": "Medium",
+        "type": "Humanoid",
+        "alignment": "Any",
+        "str": 10,
+        "dex": 10,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10,
+        "description": "An ordinary person with no special training or abilities."
+      }
+    }
+  ]
+}

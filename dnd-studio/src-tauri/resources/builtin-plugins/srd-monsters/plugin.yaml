@@ -1,0 +1,15 @@
+id: "srd-monsters"
+name: "SRD Monsters"
+version: "1.0.0"
+author: "DndStudio"
+dnd_studio_compat: ">=0.1.0"
+description: "Базовый набор монстров из SRD (System Reference Document)"
+dependencies: []
+sheets: []
+compendiums:
+  - key: "srd-monsters"
+    file: "compendiums/monsters.json"
+    type: "monster"
+    name: "SRD Monsters"
+themes: []
+link_types: []
