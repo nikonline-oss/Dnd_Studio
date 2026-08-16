@@ -3,28 +3,33 @@ import clsx from 'clsx';
 import { ChatPanel } from '../../features/chat/ChatPanel';
 import { InitiativePanel } from '../../features/initiative/InitiativePanel';
 import { useUiStore, type BottomTab } from '../stores/ui';
+import { ConnectionPanel } from '../../features/multiplayer/ConnectionPanel';
 
 const tabs: Array<{
   id: BottomTab;
   label: string;
 }> = [
-  {
-    id: 'initiative',
-    label: 'Initiative',
-  },
-  {
-    id: 'chat',
-    label: 'Chat',
-  },
-  {
-    id: 'logs',
-    label: 'Logs',
-  },
-  {
-    id: 'dslTerminal',
-    label: 'DSL Terminal',
-  },
-];
+    {
+      id: 'initiative',
+      label: 'Initiative',
+    },
+    {
+      id: 'chat',
+      label: 'Chat',
+    },
+    {
+      id: 'logs',
+      label: 'Logs',
+    },
+    {
+      id: 'dslTerminal',
+      label: 'DSL Terminal',
+    },
+    {
+      id: 'multiplayer',
+      label: 'Multiplayer'
+    },
+  ];
 
 export function BottomPanel() {
   const activeBottomTab = useUiStore((state) => state.activeBottomTab);
@@ -63,6 +68,8 @@ export function BottomPanel() {
             DSL terminal is planned for Phase 2+.
           </div>
         )}
+
+        {activeBottomTab === 'multiplayer' && <ConnectionPanel />}
       </div>
     </section>
   );

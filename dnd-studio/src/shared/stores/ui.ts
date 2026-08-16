@@ -6,7 +6,7 @@ import { applyThemeMode, type ThemeMode } from '../theme/theme';
 
 export type LeftTab = 'navigator' | 'plugins' | 'compendiums';
 export type RightTab = 'inspector' | 'journalToc';
-export type BottomTab = 'chat' | 'logs' | 'dslTerminal' | 'initiative';
+export type BottomTab = 'chat' | 'logs' | 'dslTerminal' | 'initiative' | 'multiplayer';
 
 interface UiState {
   themeMode: ThemeMode;
@@ -38,11 +38,15 @@ interface UiState {
   setLeftVisible: (visible: boolean) => void;
   setRightVisible: (visible: boolean) => void;
   setBottomVisible: (visible: boolean) => void;
+
+  connectionStatus: 'disconnected' | 'connecting' | 'connected' | 'error';
+  setConnectionStatus: (status: 'disconnected' | 'connecting' | 'connected' | 'error') => void;
 }
 
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
+
       themeMode: 'system',
 
       leftVisible: true,
@@ -124,6 +128,9 @@ export const useUiStore = create<UiState>()(
       pluginThemeId: null,
 
       setPluginThemeId: (pluginThemeId) => set({ pluginThemeId }),
+
+      connectionStatus: 'disconnected',
+      setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
     }),
     {
       name: 'dndstudio.ui',

@@ -2423,3 +2423,109 @@ select:focus-visible {
   background: var(--panel-2);
   font-size: 11px;
 }
+
+/* Connection Panel */
+
+.connection-panel {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 480px;
+}
+
+.connection-status {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.connection-status.connected {
+  color: #66bb6a;
+}
+
+.connection-status.connecting {
+  color: #ffa726;
+}
+
+.connection-status.disconnected {
+  color: var(--muted);
+}
+
+.connection-status.error {
+  color: #ef5350;
+}
+
+.connection-error {
+  padding: 8px 12px;
+  border: 1px solid rgba(239, 83, 80, 0.4);
+  border-radius: 6px;
+  background: rgba(239, 83, 80, 0.08);
+  color: #ef5350;
+  font-size: 12px;
+}
+
+.connection-mode-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.connection-mode-tabs button {
+  flex: 1;
+  padding: 6px 12px;
+  border: 1px solid var(--border-gold);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.connection-mode-tabs button.active {
+  background: var(--gold-soft);
+  color: var(--gold);
+  border-color: var(--border-gold-strong);
+}
+
+.connection-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.connection-panel input {
+  width: 100%;
+}
+
+.connection-info,
+.connection-room-info {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.connection-room-info code {
+  color: var(--text);
+  word-break: break-all;
+}
+
+/* Status Bar connection indicator */
+
+.status-connection {
+  font-size: 12px;
+}
+
+.status-connected {
+  color: #66bb6a;
+}
+
+.status-connecting {
+  color: #ffa726;
+}
+
+.status-disconnected {
+  color: var(--muted);
+}
+
+.status-error {
+  color: #ef5350;
+}

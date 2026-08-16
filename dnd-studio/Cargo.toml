@@ -6,6 +6,7 @@ members = [
   "crates/dnd-db",
   "crates/dnd-dsl",
   "crates/dnd-net",
+  "crates/dnd-relay",
 ]
 
 [workspace.package]

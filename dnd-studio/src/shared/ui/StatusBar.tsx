@@ -1,7 +1,11 @@
 import { useActiveCampaign } from '../api/hooks';
+import { useUiStore } from '../stores/ui';
 
 export function StatusBar() {
   const { data: activeCampaign } = useActiveCampaign();
+
+  const connectionStatus = useUiStore((state) => state.connectionStatus);
+
 
   return (
     <footer className="statusbar">
@@ -10,7 +14,13 @@ export function StatusBar() {
       </div>
 
       <div className="statusbar-center">
-        <span>🟢 Offline</span>
+        // В JSX:
+        <span className={`status-connection status-${connectionStatus}`}>
+          {connectionStatus === 'connected' && '🟢 Connected'}
+          {connectionStatus === 'connecting' && '🟡 Connecting…'}
+          {connectionStatus === 'disconnected' && '⚪ Offline'}
+          {connectionStatus === 'error' && '🔴 Error'}
+        </span>
       </div>
 
       <div className="statusbar-right">

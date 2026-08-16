@@ -42,3 +42,4 @@ serde_yaml = "0.9"
 
 image = { version = "0.25", features = ["webp"] }
 sha2 = "0.10"
+futures-util = "0.3.34"
