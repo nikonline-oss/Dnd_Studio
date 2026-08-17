@@ -41,7 +41,6 @@ impl ParticipantRole {
     }
 }
 
-/// Комната
 #[derive(Debug, Clone)]
 pub struct Room {
     pub room_id: String,
@@ -53,6 +52,8 @@ pub struct Room {
     pub is_active: bool,
     pub created_at: i64,
     pub participants: HashMap<String, Participant>,
+    /// Владельцы токенов: token_id -> user_id
+    pub token_owners: HashMap<String, String>,
 }
 
 impl Room {
@@ -72,20 +73,8 @@ impl Room {
             format!("{:x}", hasher.finalize())
         });
 
-        let mut participants = HashMap::new();
-
-        // GM автоматически добавляется как участник
-        let gm_user_id = uuid::Uuid::new_v4().to_string();
-        participants.insert(
-            gm_user_id.clone(),
-            Participant {
-                user_id: gm_user_id,
-                display_name: gm_name,
-                role: ParticipantRole::Gm,
-                connected_at: now,
-                last_heartbeat: now,
-            },
-        );
+        // НЕ создаём автоматического GM-участника
+        // Он будет создан при реальном подключении через WebSocket
 
         Self {
             room_id: uuid::Uuid::new_v4().to_string(),
@@ -96,7 +85,8 @@ impl Room {
             max_players,
             is_active: true,
             created_at: now,
-            participants,
+            participants: HashMap::new(), // Пустой HashMap
+            token_owners: HashMap::new(), // Пустой HashMap
         }
     }
 
@@ -120,11 +110,7 @@ impl Room {
     }
 
     /// Добавляет участника
-    pub fn add_participant(
-        &mut self,
-        display_name: String,
-        role: ParticipantRole,
-    ) -> String {
+    pub fn add_participant(&mut self, display_name: String, role: ParticipantRole) -> String {
         let user_id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().timestamp_millis();
 
@@ -184,6 +170,43 @@ impl Room {
             max_players: self.max_players,
             is_active: self.is_active,
             created_at: self.created_at,
+        }
+    }
+
+    /// Получить роль участника
+    pub fn get_role(&self, user_id: &str) -> Option<ParticipantRole> {
+        self.participants.get(user_id).map(|p| p.role.clone())
+    }
+
+    /// Является ли пользователь GM или Co-GM
+    pub fn is_gm(&self, user_id: &str) -> bool {
+        matches!(
+            self.get_role(user_id),
+            Some(ParticipantRole::Gm) | Some(ParticipantRole::CoGm)
+        )
+    }
+
+    /// Назначить владельца токена
+    pub fn set_token_owner(&mut self, token_id: &str, user_id: &str) {
+        self.token_owners
+            .insert(token_id.to_string(), user_id.to_string());
+    }
+
+    /// Проверить, владеет ли пользователь токеном
+    pub fn owns_token(&self, user_id: &str, token_id: &str) -> bool {
+        self.token_owners
+            .get(token_id)
+            .map(|owner| owner == user_id)
+            .unwrap_or(false)
+    }
+
+    /// Изменить роль участника
+    pub fn change_role(&mut self, user_id: &str, new_role: ParticipantRole) -> bool {
+        if let Some(participant) = self.participants.get_mut(user_id) {
+            participant.role = new_role;
+            true
+        } else {
+            false
         }
     }
 }

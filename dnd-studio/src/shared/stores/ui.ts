@@ -41,6 +41,9 @@ interface UiState {
 
   connectionStatus: 'disconnected' | 'connecting' | 'connected' | 'error';
   setConnectionStatus: (status: 'disconnected' | 'connecting' | 'connected' | 'error') => void;
+
+  userRole: 'gm' | 'co_gm' | 'player' | 'spectator' | null;
+  setUserRole: (role: 'gm' | 'co_gm' | 'player' | 'spectator' | null) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -131,6 +134,10 @@ export const useUiStore = create<UiState>()(
 
       connectionStatus: 'disconnected',
       setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
+
+      userRole: null,
+      setUserRole: (userRole) => set({ userRole }),
+
     }),
     {
       name: 'dndstudio.ui',

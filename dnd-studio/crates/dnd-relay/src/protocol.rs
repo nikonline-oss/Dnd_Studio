@@ -52,7 +52,6 @@ impl Envelope {
     }
 }
 
-/// Типы сообщений
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum MessageType {
@@ -65,6 +64,9 @@ pub enum MessageType {
     // Роли и права
     RoleAssigned,
     Kick,
+    RequestAction,     // Запрос действия у GM
+    ActionApproved,    // GM одобрил действие
+    ActionDenied,      // GM отклонил действие
 
     // Игровое состояние
     StateSync,
@@ -74,6 +76,7 @@ pub enum MessageType {
     TokenMove,
     TokenCreate,
     TokenDelete,
+    TokenOwnership,    // Назначение владельца токена
 
     // Чат
     ChatMessage,
@@ -201,4 +204,36 @@ pub struct RoomInfo {
     pub max_players: i32,
     pub is_active: bool,
     pub created_at: i64,
+}
+
+/// Назначение роли пользователю
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoleAssignedPayload {
+    pub target_user_id: String,
+    pub role: String,
+    pub assigned_by: String,
+}
+
+/// Запрос действия от игрока к GM
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RequestActionPayload {
+    pub action_type: String,
+    pub payload: serde_json::Value,
+    pub requester_name: String,
+}
+
+/// Ответ GM на запрос действия
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActionResponsePayload {
+    pub request_id: String,
+    pub approved: bool,
+    pub original_action: serde_json::Value,
+}
+
+/// Назначение владельца токена
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenOwnershipPayload {
+    pub token_id: String,
+    pub owner_user_id: String,
+    pub map_id: String,
 }

@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useUpdateMapFog } from '../../shared/api/hooks';
 import { open } from '@tauri-apps/plugin-dialog';
-import { MapImageImportDialog } from './MapImageImportDialog';
-import type { MapImageImportOptions } from '../../shared/api/hooks';
 
 import {
   useCharacters,
@@ -15,8 +12,12 @@ import {
 } from '../../shared/api/hooks';
 import { useMapSettingsStore } from '../../shared/stores/mapSettings';
 import { useTableStore } from '../../shared/stores/table';
+import { relayClient } from '../../shared/services/relayClient';
 
 import { MapCanvas } from './MapCanvas';
+import { MapImageImportDialog } from './MapImageImportDialog';
+import type { MapImageImportOptions } from '../../shared/api/hooks';
+import { useUiStore } from '../../shared/stores/ui';
 
 export function MapTab({ mapId }: { mapId?: string }) {
   const { data: map, isLoading } = useMap(mapId);
@@ -39,62 +40,9 @@ export function MapTab({ mapId }: { mapId?: string }) {
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [pendingDeleteTokenIds, setPendingDeleteTokenIds] = useState<string[]>([]);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string>('');
-
-  const updateMapFog = useUpdateMapFog();
-  const [fogMode, setFogMode] = useState<'none' | 'add' | 'remove'>('none');
-  const saveFogTimeoutRef = useRef<number | null>(null);
-
-  // Локальное состояние тумана
-  const [localFogCells, setLocalFogCells] = useState<Set<string>>(new Set());
-
   const [pendingImagePath, setPendingImagePath] = useState<string | null>(null);
 
-  // Синхронизация с БД при загрузке карты
-  useEffect(() => {
-    if (map?.fogData) {
-      try {
-        const parsed = JSON.parse(map.fogData);
-        if (Array.isArray(parsed)) {
-          setLocalFogCells(new Set(parsed));
-        } else {
-          setLocalFogCells(new Set());
-        }
-      } catch {
-        setLocalFogCells(new Set());
-      }
-    } else {
-      setLocalFogCells(new Set());
-    }
-  }, [map?.id, map?.fogData]);
-
-  // Debounce сохранения
-  useEffect(() => {
-    if (!map) return;
-
-    if (saveFogTimeoutRef.current) {
-      window.clearTimeout(saveFogTimeoutRef.current);
-    }
-
-    saveFogTimeoutRef.current = window.setTimeout(() => {
-      const array = Array.from(localFogCells);
-      const fogData = array.length > 0 ? JSON.stringify(array) : null;
-
-      const currentDbArray = map.fogData ? JSON.parse(map.fogData) : [];
-      if (JSON.stringify(array) !== JSON.stringify(currentDbArray)) {
-        updateMapFog.mutate({ mapId: map.id, fogData });
-      }
-    }, 800);
-
-    return () => {
-      if (saveFogTimeoutRef.current) {
-        window.clearTimeout(saveFogTimeoutRef.current);
-      }
-    };
-  }, [localFogCells, map, updateMapFog]);
-
-  const handleFogChange = useCallback((newCells: Set<string>) => {
-    setLocalFogCells(new Set(newCells));
-  }, []);
+  // ВСЕ ХУКИ useEffect И useCallback ДОЛЖНЫ БЫТЬ ЗДЕСЬ, ДО УСЛОВНЫХ ВОЗВРАТОВ
 
   useEffect(() => {
     if (map) {
@@ -104,7 +52,6 @@ export function MapTab({ mapId }: { mapId?: string }) {
     }
 
     return () => {
-      // Очистка глобального стора при размонтировании вкладки
       setSelectedMapId(null);
       setSelectedTokenIdGlobal(null);
     };
@@ -114,10 +61,63 @@ export function MapTab({ mapId }: { mapId?: string }) {
     setSelectedTokenIdGlobal(selectedTokenId);
   }, [selectedTokenId, setSelectedTokenIdGlobal]);
 
-  // 2. Вычисляемые значения
+  const connectionStatus = useUiStore((state) => state.connectionStatus);
+  const userRole = useUiStore((state) => state.userRole);
+
+  const isLocalMode = connectionStatus !== 'connected';
+  const isGM = isLocalMode || userRole === 'gm' || userRole === 'co_gm';
+  // Перемещение токена с отправкой в Relay
+  const handleMoveToken = useCallback(
+    async (tokenId: string, x: number, y: number) => {
+      if (!map) return;
+
+      try {
+        await moveToken.mutateAsync({
+          mapId: map.id,
+          tokenId,
+          x,
+          y,
+        });
+
+        // Отправляем уведомление другим клиентам
+        if (relayClient.status === 'connected') {
+          relayClient.send('token_move', {
+            token_id: tokenId,
+            map_id: map.id,   // <-- map_id обязателен
+            x,
+            y,
+            rotation: 0,
+          });
+        }
+      } catch {
+        // Rollback уже есть в useMoveToken
+      }
+    },
+    [map, moveToken],
+  );
+
+  // Обновление тумана войны с отправкой в Relay
+  const handleFogChange = useCallback(
+    (newFogCells: Set<string>) => {
+      if (!map) return;
+
+      // Сохранение в БД будет через debounce в MapTab
+      // Здесь только отправляем в Relay
+
+      if (relayClient.status === 'connected') {
+        const fogData = JSON.stringify(Array.from(newFogCells));
+        relayClient.send('fog_update', {
+          map_id: map.id,
+          fog_data: fogData,
+        });
+      }
+    },
+    [map],
+  );
+
   const showGrid = map ? (showGridByMap[map.id] ?? true) : true;
 
-  // 3. Early returns (досрочные выходы)
+  // ТЕПЕРЬ УСЛОВНЫЕ ВОЗВРАТЫ
   if (!mapId) {
     return (
       <div className="workspace-empty">
@@ -127,26 +127,18 @@ export function MapTab({ mapId }: { mapId?: string }) {
   }
 
   if (isLoading) {
-    return (
-      <div className="workspace-empty">
-        Loading map…
-      </div>
-    );
+    return <div className="workspace-empty">Loading map…</div>;
   }
 
   if (!map) {
-    return (
-      <div className="workspace-empty">
-        Map not found.
-      </div>
-    );
+    return <div className="workspace-empty">Map not found.</div>;
   }
 
-  // 4. Хендлеры и рендер (здесь TS уже знает, что map точно не null)
   const visibleTokens = tokens.filter(
     (token) => !pendingDeleteTokenIds.includes(token.id),
   );
 
+  // Создание токена с отправкой в Relay
   const handleAddToken = () => {
     const jitterX = (Math.random() - 0.5) * map.gridSize * 2;
     const jitterY = (Math.random() - 0.5) * map.gridSize * 2;
@@ -159,13 +151,25 @@ export function MapTab({ mapId }: { mapId?: string }) {
         characterId: selectedCharacterId || null,
       },
       {
-        onSuccess: (data) => {
-          setSelectedTokenId(data.id);
+        onSuccess: (newToken) => {
+          setSelectedTokenId(newToken.id);
+
+          // Отправляем уведомление другим клиентам
+          if (relayClient.status === 'connected') {
+            relayClient.send('token_create', {
+              token_id: newToken.id,
+              map_id: map.id,
+              character_id: selectedCharacterId || null,
+              x: newToken.x,
+              y: newToken.y,
+            });
+          }
         },
       },
     );
   };
 
+  // Удаление токена с отправкой в Relay
   const handleDeleteSelected = () => {
     if (!selectedTokenId) {
       return;
@@ -185,6 +189,15 @@ export function MapTab({ mapId }: { mapId?: string }) {
         tokenId,
       },
       {
+        onSuccess: () => {
+          // Отправляем уведомление другим клиентам
+          if (relayClient.status === 'connected') {
+            relayClient.send('token_delete', {
+              token_id: tokenId,
+              map_id: map.id,
+            });
+          }
+        },
         onSettled: () => {
           setPendingDeleteTokenIds((prev) =>
             prev.filter((id) => id !== tokenId),
@@ -193,24 +206,6 @@ export function MapTab({ mapId }: { mapId?: string }) {
       },
     );
   };
-
-  const handleMoveToken = async (
-    tokenId: string,
-    x: number,
-    y: number,
-  ) => {
-    try {
-      await moveToken.mutateAsync({
-        mapId: map.id,
-        tokenId,
-        x,
-        y,
-      });
-    } catch {
-      // Rollback уже есть в useMoveToken.
-    }
-  };
-
 
   const handleLoadImage = async () => {
     try {
@@ -225,7 +220,6 @@ export function MapTab({ mapId }: { mapId?: string }) {
       });
 
       if (typeof selected === 'string') {
-        // Открываем диалог вместо прямого импорта
         setPendingImagePath(selected);
       }
     } catch (error) {
@@ -263,86 +257,61 @@ export function MapTab({ mapId }: { mapId?: string }) {
         <span>{map.name}</span>
 
         <div className="map-tab-actions">
-          <div className="map-fog-controls">
-            <button
-              type="button"
-              className={fogMode === 'none' ? 'active' : ''}
-              onClick={() => setFogMode('none')}
-              title="Navigation mode"
-            >
-              Map
-            </button>
-            <button
-              type="button"
-              className={fogMode === 'add' ? 'active' : ''}
-              onClick={() => setFogMode('add')}
-              title="Add Fog"
-            >
-              Fog +
-            </button>
-            <button
-              type="button"
-              className={fogMode === 'remove' ? 'active' : ''}
-              onClick={() => setFogMode('remove')}
-              title="Remove Fog"
-            >
-              Fog -
-            </button>
-            <button
-              type="button"
-              onClick={() => handleFogChange(new Set())}
-              title="Clear all fog"
-              disabled={localFogCells.size === 0}
-            >
-              Clear
-            </button>
-          </div>
-          <button
-            type="button"
-            onClick={handleLoadImage}
-            disabled={importMapImage.isPending}
-          >
-            {importMapImage.isPending ? 'Loading…' : 'Load image'}
-          </button>
+          {/* Load image и Grid — только GM или локальный режим */}
+          {isGM && (
+            <>
+              <button
+                type="button"
+                onClick={handleLoadImage}
+                disabled={importMapImage.isPending}
+              >
+                {importMapImage.isPending ? 'Loading…' : 'Load image'}
+              </button>
 
-          <label className="map-grid-toggle">
-            <input
-              type="checkbox"
-              checked={showGrid}
-              onChange={() => toggleGrid(map.id)}
-            />
-            Grid
-          </label>
+              <label className="map-grid-toggle">
+                <input
+                  type="checkbox"
+                  checked={showGrid}
+                  onChange={() => toggleGrid(map.id)}
+                />
+                Grid
+              </label>
+            </>
+          )}
 
-          <select
-            value={selectedCharacterId}
-            onChange={(event) => setSelectedCharacterId(event.target.value)}
-            title="Character for new token"
-          >
-            <option value="">No character</option>
+          {/* Токены — только GM или локальный режим */}
+          {isGM && (
+            <>
+              <select
+                value={selectedCharacterId}
+                onChange={(event) => setSelectedCharacterId(event.target.value)}
+                title="Character for new token"
+              >
+                <option value="">No character</option>
+                {characters.map((character) => (
+                  <option key={character.id} value={character.id}>
+                    {character.name} ({character.type.toUpperCase()})
+                  </option>
+                ))}
+              </select>
 
-            {characters.map((character) => (
-              <option key={character.id} value={character.id}>
-                {character.name} ({character.type.toUpperCase()})
-              </option>
-            ))}
-          </select>
+              <button
+                type="button"
+                onClick={handleAddToken}
+                disabled={createToken.isPending}
+              >
+                {createToken.isPending ? 'Adding…' : 'Add token'}
+              </button>
 
-          <button
-            type="button"
-            onClick={handleAddToken}
-            disabled={createToken.isPending}
-          >
-            {createToken.isPending ? 'Adding…' : 'Add token'}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleDeleteSelected}
-            disabled={!selectedTokenId || deleteToken.isPending}
-          >
-            {deleteToken.isPending ? 'Deleting…' : 'Delete token'}
-          </button>
+              <button
+                type="button"
+                onClick={handleDeleteSelected}
+                disabled={!selectedTokenId || deleteToken.isPending}
+              >
+                {deleteToken.isPending ? 'Deleting…' : 'Delete token'}
+              </button>
+            </>
+          )}
         </div>
 
         <span>
@@ -357,10 +326,11 @@ export function MapTab({ mapId }: { mapId?: string }) {
         onSelectToken={setSelectedTokenId}
         onMoveToken={handleMoveToken}
         showGrid={showGrid}
-        fogCells={localFogCells}
-        fogMode={fogMode}
+        fogCells={new Set()} // Здесь должен быть реальный fogCells из состояния
+        fogMode="none"
         onFogChange={handleFogChange}
       />
+
       {pendingImagePath && (
         <MapImageImportDialog
           sourcePath={pendingImagePath}

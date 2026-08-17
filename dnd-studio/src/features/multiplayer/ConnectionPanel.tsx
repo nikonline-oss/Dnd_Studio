@@ -92,7 +92,11 @@ export function ConnectionPanel() {
                             : 'Unknown'}
                     </div>
                     <div>
-                        Role: {relayClient.connectedRole || 'Unknown'}
+                        Role: {relayClient.connectedRole === 'gm'
+                            ? '👑 Game Master'
+                            : relayClient.connectedRole === 'player'
+                                ? '🎮 Player'
+                                : relayClient.connectedRole || 'Unknown'}
                     </div>
                 </div>
 

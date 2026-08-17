@@ -76,7 +76,7 @@ async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("dnd_relay=debug,info")),
         )
         .init();
 
@@ -102,8 +102,8 @@ async fn main() {
     let app = Router::new()
         .route("/api/health", get(health))
         .route("/api/rooms", post(create_room))
-        .route("/api/rooms/:room_id", get(get_room_info))  // <-- :room_id
-        .route("/ws/:room_id", get(ws::ws_handler))         // <-- :room_id
+        .route("/api/rooms/:room_id", get(get_room_info)) // <-- :room_id
+        .route("/ws/:room_id", get(ws::ws_handler)) // <-- :room_id
         .layer(cors)
         .with_state(state);
 

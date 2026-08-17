@@ -9,6 +9,7 @@ import { useThemeEffect } from '../shared/hooks/useThemeEffect';
 import { logDebug } from '../shared/lib/debug';
 import { useWorkspaceStore } from '../shared/stores/workspace';
 import { usePluginTheme } from '../shared/hooks/usePluginTheme';
+import { useMultiplayerSync } from '../shared/hooks/useMultiplayerSync';
 
 export default function App() {
   const workspaceReady = useWorkspaceStore.persist.hasHydrated();
@@ -16,6 +17,7 @@ export default function App() {
   useThemeEffect();
   usePluginTheme();
   useGlobalShortcuts();
+  useMultiplayerSync();
   useAutoOpenLastCampaign(workspaceReady);
 
   const {
