@@ -4,16 +4,48 @@ import { relayClient } from '../../shared/services/relayClient';
 import { useChatStore } from '../../shared/stores/chat';
 import { useUiStore } from '../../shared/stores/ui';
 
+/** Парсинг команды из текста сообщения */
+function parseCommand(text: string): { command: string; args: string[] } | null {
+  if (!text.startsWith('/')) return null;
+
+  const parts = text.slice(1).split(/\s+/);
+  const command = parts[0].toLowerCase();
+  const args = parts.slice(1);
+
+  return { command, args };
+}
+
+/** Простой бросок костей (для /roll) */
+function rollDiceNotation(notation: string): { rolls: number[]; total: number } | null {
+  const match = notation.match(/^(\d+)?d(\d+)([+-]\d+)?$/i);
+  if (!match) return null;
+
+  const count = parseInt(match[1] || '1', 10);
+  const sides = parseInt(match[2], 10);
+  const modifier = parseInt(match[3] || '0', 10);
+
+  if (count < 1 || count > 100 || sides < 2 || sides > 1000) return null;
+
+  const rolls: number[] = [];
+  for (let i = 0; i < count; i++) {
+    rolls.push(Math.floor(Math.random() * sides) + 1);
+  }
+
+  const total = rolls.reduce((sum, r) => sum + r, 0) + modifier;
+
+  return { rolls, total };
+}
+
 export function ChatPanel() {
   const messages = useChatStore((state) => state.messages);
   const addMessage = useChatStore((state) => state.addMessage);
+  const addSystemMessage = useChatStore((state) => state.addSystemMessage);
+  const addDiceMessage = useChatStore((state) => state.addDiceMessage);
   const connectionStatus = useUiStore((state) => state.connectionStatus);
-  const userRole = useUiStore((state) => state.userRole);
 
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Автоскролл вниз при новых сообщениях
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
@@ -26,9 +58,18 @@ export function ChatPanel() {
     const text = inputText.trim();
     if (!text) return;
 
-    // Локальное имя отправителя
-    const senderName = relayClient.status === 'connected'
-      ? `You (${relayClient.connectedRole})`
+    // Проверяем, является ли текст командой
+    const cmd = parseCommand(text);
+
+    if (cmd) {
+      handleCommand(cmd.command, cmd.args);
+      setInputText('');
+      return;
+    }
+
+    // Определяем имя отправителя
+    const senderName = isConnected
+      ? relayClient.displayName
       : 'You';
 
     // Добавляем в локальный store
@@ -41,8 +82,8 @@ export function ChatPanel() {
       type: 'user',
     });
 
-    // Отправляем через Relay если подключены
-    if (relayClient.status === 'connected') {
+    // Отправляем через Relay
+    if (isConnected) {
       relayClient.send('chat_message', {
         channel: 'general',
         text,
@@ -53,11 +94,54 @@ export function ChatPanel() {
     setInputText('');
   };
 
+  const handleCommand = (command: string, args: string[]) => {
+    switch (command) {
+      case 'help': {
+        addSystemMessage(
+          'Commands: /roll <dice> (e.g. /roll 1d20), /help',
+        );
+        break;
+      }
+
+      case 'roll': {
+        const notation = args[0] || '1d20';
+        const result = rollDiceNotation(notation);
+
+        if (!result) {
+          addSystemMessage(`Invalid dice notation: ${notation}`);
+          return;
+        }
+
+        const senderName = isConnected ? relayClient.displayName : 'You';
+
+        // Добавляем локально
+        addDiceMessage(senderName, notation, result.total);
+
+        // Отправляем через Relay
+        if (isConnected) {
+          relayClient.send('dice_roll', {
+            notation,
+            result: result.total,
+            rolls: result.rolls,
+            modifier: 0,
+            roller_name: senderName,
+          });
+        }
+        break;
+      }
+
+      default: {
+        addSystemMessage(`Unknown command: /${command}. Type /help for list.`);
+        break;
+      }
+    }
+  };
+
   return (
     <div className="chat-panel">
       <div className="chat-messages">
         {messages.length === 0 && (
-          <div className="chat-empty">No messages yet.</div>
+          <div className="chat-empty">No messages yet. Type /help for commands.</div>
         )}
 
         {messages.map((message) => (
@@ -67,6 +151,19 @@ export function ChatPanel() {
           >
             {message.type === 'system' ? (
               <span className="chat-system-text">{message.text}</span>
+            ) : message.type === 'dice' ? (
+              <>
+                <span className="chat-sender">{message.senderName}</span>
+                <span className="chat-time">
+                  {new Date(message.timestamp).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+                <span className="chat-dice-text">
+                  🎲 {message.diceNotation} → <strong>{message.diceResult}</strong>
+                </span>
+              </>
             ) : (
               <>
                 <span className="chat-sender">{message.senderName}</span>
@@ -92,8 +189,8 @@ export function ChatPanel() {
           onChange={(event) => setInputText(event.target.value)}
           placeholder={
             isConnected
-              ? 'Type a message…'
-              : 'Type a message (offline)…'
+              ? 'Type a message or /roll 1d20…'
+              : 'Type a message or /roll 1d20…'
           }
         />
         <button type="submit" disabled={!inputText.trim()}>

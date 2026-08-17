@@ -2711,3 +2711,12 @@ select:focus-visible {
   flex: 1;
   min-width: 0;
 }
+
+.chat-dice-text {
+  color: var(--gold);
+}
+
+.chat-dice-text strong {
+  color: var(--gold-strong);
+  font-weight: 700;
+}

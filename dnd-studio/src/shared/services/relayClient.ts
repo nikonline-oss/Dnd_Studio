@@ -94,10 +94,15 @@ class RelayClient {
     private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
     private userId: string = '';
     private role: string = '';
+    private _displayName: string = '';
     private _status: ConnectionStatus = 'disconnected';
     private shouldReconnect = false;
     private reconnectAttempts = 0;
     private maxReconnectAttempts = 5;
+
+    get displayName(): string {
+        return this._displayName || 'Unknown';
+    }
 
     get status(): ConnectionStatus {
         return this._status;
@@ -209,6 +214,7 @@ class RelayClient {
         this.setStatus('disconnected');
         this.userId = '';
         this.role = '';
+        this._displayName = '';
 
         useUiStore.getState().setUserRole(null);
     }
@@ -271,6 +277,7 @@ class RelayClient {
                     if (payload.success) {
                         this.userId = payload.user_id ?? '';
                         this.role = payload.role ?? '';
+                        this._displayName = this.config?.displayName ?? 'Unknown';
                         this.reconnectAttempts = 0;
                         this.setStatus('connected');
                         this.startHeartbeat();
