@@ -1,233 +1,102 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
-import { useActiveCampaign } from '../../shared/api/hooks';
-import { formatNumber, rollExpression } from '../../shared/lib/dice';
-import { useChatStore, type ChatMessage } from '../../shared/stores/chat';
-
-const EMPTY_MESSAGES: ChatMessage[] = [];
-
-const QUICK_ROLLS = [
-  '1d20',
-  '1d12',
-  '1d10',
-  '1d8',
-  '1d6',
-  '1d4',
-  '2d4*23',
-];
-
-function formatTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
-
-function DiceMessage({ message }: { message: ChatMessage }) {
-  const roll = message.roll;
-
-  if (!roll) {
-    return null;
-  }
-
-  const criticalClass = roll.natural20
-    ? 'dice-total-crit'
-    : roll.natural1
-      ? 'dice-total-fumble'
-      : '';
-
-  return (
-    <div className="chat-message chat-message-dice">
-      <div className="chat-message-header">
-        <span>{message.author} rolled {roll.input}</span>
-        <time>{formatTime(message.createdAt)}</time>
-      </div>
-
-      <div className="chat-dice-breakdown">
-        {roll.breakdown}
-      </div>
-
-      <div className="chat-dice-result">
-        <span className={`chat-dice-total ${criticalClass}`}>
-          = {formatNumber(roll.total)}
-        </span>
-
-        {roll.natural20 && (
-          <span className="chat-dice-badge">CRIT</span>
-        )}
-
-        {roll.natural1 && (
-          <span className="chat-dice-badge">FUMBLE</span>
-        )}
-      </div>
-    </div>
-  );
-}
+import { relayClient } from '../../shared/services/relayClient';
+import { useChatStore } from '../../shared/stores/chat';
+import { useUiStore } from '../../shared/stores/ui';
 
 export function ChatPanel() {
-  const { data: activeCampaign } = useActiveCampaign();
+  const messages = useChatStore((state) => state.messages);
+  const addMessage = useChatStore((state) => state.addMessage);
+  const connectionStatus = useUiStore((state) => state.connectionStatus);
+  const userRole = useUiStore((state) => state.userRole);
 
-  const messagesByCampaign = useChatStore(
-    (state) => state.messagesByCampaign,
-  );
+  const [inputText, setInputText] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  const addUserMessage = useChatStore((state) => state.addUserMessage);
-  const addSystemMessage = useChatStore((state) => state.addSystemMessage);
-  const addDiceRoll = useChatStore((state) => state.addDiceRoll);
-  const clearChat = useChatStore((state) => state.clearChat);
-
-  const [input, setInput] = useState('');
-
-  const bottomRef = useRef<HTMLDivElement | null>(null);
-
-  const messages = activeCampaign
-    ? messagesByCampaign[activeCampaign.id] ?? EMPTY_MESSAGES
-    : EMPTY_MESSAGES;
-
+  // Автоскролл вниз при новых сообщениях
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'end',
-    });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
 
-  if (!activeCampaign) {
-    return (
-      <div className="empty-state">
-        Open a campaign to use chat.
-      </div>
-    );
-  }
+  const isConnected = connectionStatus === 'connected';
 
-  const performRoll = (notation: string) => {
-    const roll = rollExpression(notation);
-
-    if (!roll) {
-      addSystemMessage(
-        activeCampaign.id,
-        `Cannot parse dice expression: ${notation}`,
-      );
-
-      return;
-    }
-
-    addDiceRoll(activeCampaign.id, roll);
-  };
-
-  const onSubmit = (event: FormEvent) => {
+  const handleSend = (event: FormEvent) => {
     event.preventDefault();
 
-    const text = input.trim();
+    const text = inputText.trim();
+    if (!text) return;
 
-    if (!text) {
-      return;
+    // Локальное имя отправителя
+    const senderName = relayClient.status === 'connected'
+      ? `You (${relayClient.connectedRole})`
+      : 'You';
+
+    // Добавляем в локальный store
+    addMessage({
+      id: crypto.randomUUID?.() ?? Math.random().toString(36).slice(2),
+      text,
+      senderId: relayClient.connectedUserId || 'local',
+      senderName,
+      timestamp: Date.now(),
+      type: 'user',
+    });
+
+    // Отправляем через Relay если подключены
+    if (relayClient.status === 'connected') {
+      relayClient.send('chat_message', {
+        channel: 'general',
+        text,
+        sender_name: senderName,
+      });
     }
 
-    const commandMatch = text.match(/^\/(?:roll|r)\s+(.*)$/i);
-
-    if (commandMatch) {
-      performRoll(commandMatch[1]);
-      setInput('');
-      return;
-    }
-
-    const directRoll = text.includes('d')
-      ? rollExpression(text)
-      : null;
-
-    if (directRoll) {
-      addDiceRoll(activeCampaign.id, directRoll);
-      setInput('');
-      return;
-    }
-
-    addUserMessage(activeCampaign.id, text);
-    setInput('');
+    setInputText('');
   };
 
   return (
-    <div className="chat">
-      <div className="chat-toolbar">
-        <div className="chat-quick-actions">
-          {QUICK_ROLLS.map((notation) => (
-            <button
-              key={notation}
-              type="button"
-              onClick={() => performRoll(notation)}
-            >
-              {notation}
-            </button>
-          ))}
-        </div>
-
-        <button
-          type="button"
-          onClick={() => clearChat(activeCampaign.id)}
-        >
-          Clear
-        </button>
-      </div>
-
+    <div className="chat-panel">
       <div className="chat-messages">
         {messages.length === 0 && (
-          <div className="empty-state">
-            No messages yet. Try `/roll 2d4*23`.
-          </div>
+          <div className="chat-empty">No messages yet.</div>
         )}
 
-        {messages.map((message) => {
-          if (message.kind === 'dice') {
-            return (
-              <DiceMessage
-                key={message.id}
-                message={message}
-              />
-            );
-          }
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={`chat-message chat-message-${message.type}`}
+          >
+            {message.type === 'system' ? (
+              <span className="chat-system-text">{message.text}</span>
+            ) : (
+              <>
+                <span className="chat-sender">{message.senderName}</span>
+                <span className="chat-time">
+                  {new Date(message.timestamp).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+                <span className="chat-text">{message.text}</span>
+              </>
+            )}
+          </div>
+        ))}
 
-          if (message.kind === 'system') {
-            return (
-              <div
-                key={message.id}
-                className="chat-message chat-message-system"
-              >
-                <div className="chat-message-header">
-                  <span>System</span>
-                  <time>{formatTime(message.createdAt)}</time>
-                </div>
-
-                <div className="chat-message-text">{message.text}</div>
-              </div>
-            );
-          }
-
-          return (
-            <div
-              key={message.id}
-              className="chat-message chat-message-user"
-            >
-              <div className="chat-message-header">
-                <span>{message.author}</span>
-                <time>{formatTime(message.createdAt)}</time>
-              </div>
-
-              <div className="chat-message-text">{message.text}</div>
-            </div>
-          );
-        })}
-
-        <div ref={bottomRef} />
+        <div ref={messagesEndRef} />
       </div>
 
-      <form className="chat-input" onSubmit={onSubmit}>
+      <form className="chat-input" onSubmit={handleSend}>
         <input
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder="Message or /roll 2d4*23"
+          type="text"
+          value={inputText}
+          onChange={(event) => setInputText(event.target.value)}
+          placeholder={
+            isConnected
+              ? 'Type a message…'
+              : 'Type a message (offline)…'
+          }
         />
-
-        <button type="submit" disabled={!input.trim()}>
+        <button type="submit" disabled={!inputText.trim()}>
           Send
         </button>
       </form>

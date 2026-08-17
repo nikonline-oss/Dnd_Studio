@@ -355,6 +355,10 @@ class RelayClient {
             }
 
             default: {
+                if (envelope.sender_id === this.userId) {
+                    break;
+                }
+
                 const handlers = this.handlers.get(envelope.type);
                 if (handlers) {
                     handlers.forEach((handler) => {
