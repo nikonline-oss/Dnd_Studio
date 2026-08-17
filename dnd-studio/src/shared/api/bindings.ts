@@ -130,6 +130,14 @@ export const commands = {
 	 *  Возвращает список плагинов, которые зависят от указанного.
 	 */
 	canUninstallPlugin: (pluginId: string) => typedError<string[], AppError>(__TAURI_INVOKE("can_uninstall_plugin", { pluginId })),
+	/**  Экспортирует текущую кампанию во временный файл и возвращает путь */
+	exportCampaignToTemp: () => typedError<string, AppError>(__TAURI_INVOKE("export_campaign_to_temp")),
+	/**  Читает файл и возвращает его содержимое как массив байтов */
+	readFileBytes: (filePath: string) => typedError<number[], AppError>(__TAURI_INVOKE("read_file_bytes", { filePath })),
+	/**  Импортирует кампанию из массива байтов и открывает её */
+	importCampaignFromBytes: (fileData: number[]) => typedError<string, AppError>(__TAURI_INVOKE("import_campaign_from_bytes", { fileData })),
+	/**  Удаляет временный файл */
+	deleteTempFile: (filePath: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_temp_file", { filePath })),
 };
 
 /* Types */

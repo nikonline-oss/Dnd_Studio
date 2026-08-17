@@ -5,6 +5,7 @@ use std::fs;
 use std::io::{Read, Write};
 use std::path::Path;
 use tauri::State;
+use crate::commands::require_db;
 use zip::write::SimpleFileOptions;
 
 /// Экспорт активной кампании в файл .dndcampaign (ZIP)
@@ -53,8 +54,7 @@ pub async fn export_campaign(
         .map_err(AppError::io)?;
 
     // 2. db.sqlite
-    zip.start_file("db.sqlite", options)
-        .map_err(AppError::io)?;
+    zip.start_file("db.sqlite", options).map_err(AppError::io)?;
 
     let mut db_file = fs::File::open(&db_path).map_err(AppError::io)?;
     let mut db_bytes = Vec::new();
@@ -90,8 +90,7 @@ fn add_dir_to_zip(
         if path.is_dir() {
             add_dir_to_zip(zip, &path, &zip_path, options)?;
         } else {
-            zip.start_file(&zip_path, options)
-                .map_err(AppError::io)?;
+            zip.start_file(&zip_path, options).map_err(AppError::io)?;
 
             let mut file = fs::File::open(&path).map_err(AppError::io)?;
             let mut bytes = Vec::new();
@@ -154,12 +153,22 @@ pub async fn import_campaign(
 
     let slug = campaign_name
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
         .collect::<String>()
         .trim_matches('-')
         .to_string();
 
-    let slug = if slug.is_empty() { "campaign".to_string() } else { slug };
+    let slug = if slug.is_empty() {
+        "campaign".to_string()
+    } else {
+        slug
+    };
     let file_name = format!("{}-{}.db", slug, &import_id[..8]);
     let dest_db_path = paths.campaigns_dir.join(&file_name);
 
@@ -168,8 +177,15 @@ pub async fn import_campaign(
 
     // Извлекаем assets/ если есть
     let assets_dir = {
-        let stem = dest_db_path.file_stem().unwrap_or_default().to_string_lossy().to_string();
-        dest_db_path.parent().unwrap_or(Path::new("")).join(format!("{}.assets", stem))
+        let stem = dest_db_path
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        dest_db_path
+            .parent()
+            .unwrap_or(Path::new(""))
+            .join(format!("{}.assets", stem))
     };
 
     for i in 0..archive.len() {
@@ -202,7 +218,10 @@ pub async fn import_campaign(
 
     let summary = CampaignSummary {
         id: meta.get("id").cloned().unwrap_or(import_id),
-        name: meta.get("name").cloned().unwrap_or_else(|| campaign_name.to_string()),
+        name: meta
+            .get("name")
+            .cloned()
+            .unwrap_or_else(|| campaign_name.to_string()),
         file_name,
         created_at,
         last_opened_at: Some(dnd_db::now_unix()),
@@ -219,4 +238,60 @@ pub async fn import_campaign(
     }
 
     Ok(summary)
+}
+
+/// Экспортирует текущую кампанию во временный файл и возвращает путь
+#[tauri::command]
+#[specta::specta]
+pub async fn export_campaign_to_temp(
+    state: State<'_, AppState>,
+    paths: State<'_, AppPaths>,
+) -> Result<String, AppError> {
+    let db = require_db(&state.campaign).await?;
+
+    let db_path = db.path().to_path_buf();
+
+    if !db_path.exists() {
+        return Err(AppError::Io("Campaign database not found".to_string()));
+    }
+
+    // Создаём временный файл
+    let temp_path =
+        std::env::temp_dir().join(format!("dndstudio_campaign_{}.db", uuid::Uuid::new_v4()));
+
+    std::fs::copy(&db_path, &temp_path).map_err(AppError::io)?;
+
+    Ok(temp_path.to_string_lossy().to_string())
+}
+
+/// Читает файл и возвращает его содержимое как массив байтов
+#[tauri::command]
+#[specta::specta]
+pub async fn read_file_bytes(file_path: String) -> Result<Vec<u8>, AppError> {
+    std::fs::read(&file_path).map_err(AppError::io)
+}
+
+/// Удаляет временный файл
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_temp_file(file_path: String) -> Result<(), AppError> {
+    std::fs::remove_file(&file_path).map_err(AppError::io)
+}
+
+/// Импортирует кампанию из массива байтов и открывает её
+#[tauri::command]
+#[specta::specta]
+pub async fn import_campaign_from_bytes(
+    state: State<'_, AppState>,
+    paths: State<'_, AppPaths>,
+    file_data: Vec<u8>,
+) -> Result<String, AppError> {
+    // Создаём временный файл
+    let temp_path = paths
+        .campaigns_dir
+        .join(format!("multiplayer_{}.db", uuid::Uuid::new_v4()));
+
+    std::fs::write(&temp_path, &file_data).map_err(AppError::io)?;
+
+    Ok(temp_path.to_string_lossy().to_string())
 }

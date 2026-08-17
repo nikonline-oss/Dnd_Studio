@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { relayClient } from '../../shared/services/relayClient';
 import { useUiStore } from '../../shared/stores/ui';
+import { checkCampaignAvailability, downloadCampaignFromRelay, uploadCampaignToRelay } from '../../shared/services/campaignSharing';
 
 export function ConnectionPanel() {
     const connectionStatus = useUiStore((state) => state.connectionStatus);
@@ -23,10 +24,17 @@ export function ConnectionPanel() {
     const isConnected = connectionStatus === 'connected';
     const isConnecting = connectionStatus === 'connecting';
 
+
+    // Состояние для прогресса
+    const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+    const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
+
     const handleCreateRoom = async () => {
         setError(null);
+        setUploadProgress(null);
 
         try {
+            // 1. Создаём комнату на сервере
             const response = await fetch(`${serverUrl.replace(/^ws/, 'http')}/api/rooms`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -45,7 +53,19 @@ export function ConnectionPanel() {
             const data = await response.json();
             setCreatedRoom(data);
 
-            // Автоматически подключаемся как GM
+            // 2. Загружаем кампанию на сервер
+            setUploadProgress(0);
+            await uploadCampaignToRelay(
+                {
+                    serverUrl,
+                    roomId: data.room_id,
+                    gmToken: data.gm_token,
+                },
+                (percent) => setUploadProgress(percent),
+            );
+            setUploadProgress(null);
+
+            // 3. Подключаемся как GM
             await relayClient.connect({
                 serverUrl,
                 roomId: data.room_id,
@@ -53,14 +73,34 @@ export function ConnectionPanel() {
                 displayName: displayName || 'GM',
             });
         } catch (e) {
+            setUploadProgress(null);
             setError(e instanceof Error ? e.message : 'Unknown error');
         }
     };
 
     const handleJoinRoom = async () => {
         setError(null);
+        setDownloadProgress(null);
 
         try {
+            // 1. Проверяем доступность кампании
+            const campaignInfo = await checkCampaignAvailability(serverUrl, roomId);
+
+            if (campaignInfo.hasCampaign) {
+                // 2. Скачиваем кампанию
+                setDownloadProgress(0);
+                await downloadCampaignFromRelay(
+                    serverUrl,
+                    roomId,
+                    (percent) => setDownloadProgress(percent),
+                );
+                setDownloadProgress(null);
+
+                // TODO: Открыть скачанную кампанию
+                // Здесь нужно вызвать команду для открытия кампании
+            }
+
+            // 3. Подключаемся
             await relayClient.connect({
                 serverUrl,
                 roomId,
@@ -68,9 +108,11 @@ export function ConnectionPanel() {
                 displayName: displayName || 'Player',
             });
         } catch (e) {
+            setDownloadProgress(null);
             setError(e instanceof Error ? e.message : 'Connection failed');
         }
     };
+
 
     const handleDisconnect = () => {
         relayClient.disconnect();
@@ -99,6 +141,30 @@ export function ConnectionPanel() {
                                 : relayClient.connectedRole || 'Unknown'}
                     </div>
                 </div>
+
+                {uploadProgress !== null && (
+                    <div className="connection-progress">
+                        <div className="connection-progress-bar">
+                            <div
+                                className="connection-progress-fill"
+                                style={{ width: `${uploadProgress}%` }}
+                            />
+                        </div>
+                        <span>Uploading campaign… {uploadProgress}%</span>
+                    </div>
+                )}
+
+                {downloadProgress !== null && (
+                    <div className="connection-progress">
+                        <div className="connection-progress-bar">
+                            <div
+                                className="connection-progress-fill"
+                                style={{ width: `${downloadProgress}%` }}
+                            />
+                        </div>
+                        <span>Downloading campaign… {downloadProgress}%</span>
+                    </div>
+                )}
 
                 {createdRoom && (
                     <div className="connection-room-info">

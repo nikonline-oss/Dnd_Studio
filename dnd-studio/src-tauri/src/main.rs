@@ -10,7 +10,10 @@ use commands::assets::{
 use commands::campaign::{
     close_campaign, create_campaign, get_active_campaign, list_campaigns, open_campaign,
 };
-use commands::campaign_io::{export_campaign, import_campaign};
+use commands::campaign_io::{
+    delete_temp_file, export_campaign, export_campaign_to_temp, import_campaign,
+    import_campaign_from_bytes, read_file_bytes,
+};
 use commands::characters::{create_character, get_character, list_characters, update_character};
 use commands::compendiums::{
     create_compendium, create_compendium_entry, delete_compendium, delete_compendium_entry,
@@ -100,7 +103,11 @@ fn main() {
             read_file_as_data_url,
             validate_plugin_dependencies,
             can_deactivate_plugin,
-            can_uninstall_plugin
+            can_uninstall_plugin,
+            export_campaign_to_temp,
+            read_file_bytes,
+            import_campaign_from_bytes,
+            delete_temp_file
         ]);
 
     #[cfg(debug_assertions)]

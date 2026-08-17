@@ -22,7 +22,7 @@ function invalidatePluginRelatedData(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ['linkTypes'] });
 }
 
-async function unwrap<T, E extends { kind: string; message?: string }>(
+export async function unwrap<T, E extends { kind: string; message?: string }>(
   promise: Promise<{ status: "ok"; data: T } | { status: "error"; error: E }>
 ): Promise<T> {
   const result = await promise;
