@@ -162,6 +162,8 @@ pub async fn open_campaign(
     // Открываем БД
     let db = CampaignDb::open(&db_path).await?;
 
+
+    db.checkpoint().await?;
     // Устанавливаем как активную
     {
         let mut current = state.campaign.lock().await;

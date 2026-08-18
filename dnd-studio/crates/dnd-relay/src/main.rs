@@ -78,24 +78,31 @@ async fn upload_campaign(
     Path(room_id): Path<String>,
     body: Bytes,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    // Проверяем, что комната существует
     if state.get_room(&room_id).await.is_none() {
         return Err(StatusCode::NOT_FOUND);
     }
 
+    let body_size = body.len();
+    info!(
+        "Campaign upload request for room {}: {} bytes",
+        room_id, body_size
+    );
+
+    if body_size == 0 {
+        error!("Empty campaign file received for room {}", room_id);
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
     match state.store_campaign_file(&room_id, body.to_vec()).await {
         Ok(size) => {
-            info!(
-                "Campaign file uploaded for room {}: {} bytes",
-                room_id, size
-            );
+            info!("Campaign file stored for room {}: {} bytes", room_id, size);
             Ok(Json(serde_json::json!({
                 "success": true,
                 "file_size": size,
             })))
         }
         Err(e) => {
-            error!("Failed to upload campaign: {}", e);
+            error!("Failed to store campaign for room {}: {}", room_id, e);
             Err(StatusCode::BAD_REQUEST)
         }
     }
@@ -106,17 +113,19 @@ async fn download_campaign(
     State(state): State<Arc<AppState>>,
     Path(room_id): Path<String>,
 ) -> Result<Vec<u8>, StatusCode> {
+    info!("Campaign download request for room {}", room_id);
+
     match state.read_campaign_file(&room_id).await {
         Ok(data) => {
             info!(
-                "Campaign file downloaded for room {}: {} bytes",
+                "Campaign file served for room {}: {} bytes",
                 room_id,
                 data.len()
             );
             Ok(data)
         }
         Err(e) => {
-            error!("Failed to download campaign: {}", e);
+            error!("Failed to serve campaign for room {}: {}", room_id, e);
             Err(StatusCode::NOT_FOUND)
         }
     }

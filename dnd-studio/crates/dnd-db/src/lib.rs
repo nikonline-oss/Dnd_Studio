@@ -1937,6 +1937,32 @@ impl CampaignDb {
 
         Ok(())
     }
+
+    /// Выполняет WAL checkpoint — записывает все данные из WAL в основной файл.
+    /// Обязательно вызывать перед копированием/экспортом файла БД.
+    pub async fn checkpoint(&self) -> Result<(), AppError> {
+        sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+            .execute(&self.pool)
+            .await
+            .map_err(AppError::db)?;
+
+        Ok(())
+    }
+
+    /// Создаёт полную копию БД в указанный файл через VACUUM INTO.
+    /// Это безопасный способ получить snapshot БД в WAL режиме.
+    pub async fn backup_to(&self, dest_path: &Path) -> Result<(), AppError> {
+        // VACUUM INTO создаёт полную копию БД в один файл,
+        // включая все данные из WAL
+        let dest_str = dest_path.to_string_lossy().to_string();
+
+        sqlx::query(&format!("VACUUM INTO '{}'", dest_str.replace('\'', "''")))
+            .execute(&self.pool)
+            .await
+            .map_err(AppError::db)?;
+
+        Ok(())
+    }
 }
 
 // ============================================

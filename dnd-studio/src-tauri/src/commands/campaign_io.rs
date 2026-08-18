@@ -9,16 +9,14 @@ use tauri::State;
 use zip::write::SimpleFileOptions;
 
 /// Экспорт активной кампании в файл .dndcampaign (ZIP)
+/// Экспорт активной кампании в файл .dndcampaign (ZIP)
 #[tauri::command]
 #[specta::specta]
 pub async fn export_campaign(
     state: State<'_, AppState>,
     destination_path: String,
 ) -> Result<(), AppError> {
-    let db = {
-        let current = state.campaign.lock().await;
-        current.clone().ok_or(AppError::NoCampaign)?
-    };
+    let db = require_db(&state.campaign).await?;
 
     let db_path = db.path().to_path_buf();
 
@@ -38,6 +36,13 @@ pub async fn export_campaign(
         "exported_at": exported_at,
     });
 
+    // Создаём временную копию БД через VACUUM INTO
+    // Это гарантирует, что все данные из WAL будут включены
+    let temp_db_path =
+        std::env::temp_dir().join(format!("dndstudio_export_{}.db", uuid::Uuid::new_v4()));
+
+    db.backup_to(&temp_db_path).await?;
+
     let dest = Path::new(&destination_path);
     let file = fs::File::create(dest).map_err(AppError::io)?;
 
@@ -50,16 +55,18 @@ pub async fn export_campaign(
     zip.write_all(meta_json.to_string().as_bytes())
         .map_err(AppError::io)?;
 
-    // 2. db.sqlite
-    zip.start_file("db.sqlite", options)
-        .map_err(AppError::io)?;
+    // 2. db.sqlite — читаем из временной копии (с WAL данными)
+    zip.start_file("db.sqlite", options).map_err(AppError::io)?;
 
-    let mut db_file = fs::File::open(&db_path).map_err(AppError::io)?;
+    let mut db_file = fs::File::open(&temp_db_path).map_err(AppError::io)?;
     let mut db_bytes = Vec::new();
     db_file.read_to_end(&mut db_bytes).map_err(AppError::io)?;
     zip.write_all(&db_bytes).map_err(AppError::io)?;
 
-    // 3. assets/ (из директории кампании)
+    // Удаляем временный файл
+    let _ = fs::remove_file(&temp_db_path);
+
+    // 3. assets/
     let assets_dir = db.assets_dir();
     if assets_dir.exists() && assets_dir.is_dir() {
         add_dir_to_zip(&mut zip, &assets_dir, "assets", options)?;
@@ -69,7 +76,6 @@ pub async fn export_campaign(
 
     Ok(())
 }
-
 /// Рекурсивно добавляет директорию в ZIP
 fn add_dir_to_zip(
     zip: &mut zip::ZipWriter<fs::File>,
@@ -88,8 +94,7 @@ fn add_dir_to_zip(
         if path.is_dir() {
             add_dir_to_zip(zip, &path, &zip_path, options)?;
         } else {
-            zip.start_file(&zip_path, options)
-                .map_err(AppError::io)?;
+            zip.start_file(&zip_path, options).map_err(AppError::io)?;
 
             let mut file = fs::File::open(&path).map_err(AppError::io)?;
             let mut bytes = Vec::new();
@@ -206,6 +211,8 @@ pub async fn import_campaign(
     // Открываем кампанию и прогоняем миграции
     let db = CampaignDb::open(&dest_db_path).await?;
 
+    db.checkpoint().await?;
+
     // Обновляем profile_id в метаданных
     db.set_meta("profile_id", &profile_id).await?;
 
@@ -256,13 +263,41 @@ pub async fn save_multiplayer_campaign(
     file_data: Vec<u8>,
     profile_id: String,
 ) -> Result<String, AppError> {
-    let dir = paths.session_dir(&profile_id, &room_id);
+    // Логируем размер полученных данных
+    eprintln!(
+        "[save_multiplayer_campaign] room={}, data_size={} bytes",
+        room_id,
+        file_data.len()
+    );
 
+    if file_data.is_empty() {
+        return Err(AppError::Validation(
+            "Received empty campaign file".to_string(),
+        ));
+    }
+
+    let dir = paths.session_dir(&profile_id, &room_id);
     fs::create_dir_all(&dir).map_err(AppError::io)?;
 
-    // Сохраняем campaign.db
     let db_path = paths.session_db_file(&profile_id, &room_id);
     fs::write(&db_path, &file_data).map_err(AppError::io)?;
+
+    // Проверяем что файл записался
+    let written_size = fs::metadata(&db_path).map_err(AppError::io)?.len();
+
+    eprintln!(
+        "[save_multiplayer_campaign] file written: {} bytes (expected {})",
+        written_size,
+        file_data.len()
+    );
+
+    if written_size != file_data.len() as u64 {
+        return Err(AppError::Validation(format!(
+            "File size mismatch: wrote {} bytes, expected {}",
+            written_size,
+            file_data.len()
+        )));
+    }
 
     // Открываем БД для обновления метаданных
     let db = CampaignDb::open(&db_path).await?;
@@ -270,6 +305,7 @@ pub async fn save_multiplayer_campaign(
     db.set_meta("room_id", &room_id).await?;
     db.set_meta("server_url", &server_url).await?;
     db.set_meta("role", &role).await?;
+    db.checkpoint().await?;
     drop(db);
 
     // Сохраняем session.json
@@ -318,6 +354,7 @@ pub async fn open_multiplayer_campaign(
 
     // Открываем мультиплеерную кампанию
     let db = CampaignDb::open(&db_path).await?;
+    db.checkpoint().await?;
     let meta = db.meta().await?;
 
     let summary = CampaignSummary {
@@ -463,8 +500,7 @@ pub async fn update_multiplayer_session(
     }
 
     let content = fs::read_to_string(&session_path).map_err(AppError::io)?;
-    let mut session: serde_json::Value =
-        serde_json::from_str(&content).map_err(AppError::io)?;
+    let mut session: serde_json::Value = serde_json::from_str(&content).map_err(AppError::io)?;
 
     if let Some(obj) = session.as_object_mut() {
         obj.insert(
@@ -498,9 +534,7 @@ pub async fn update_multiplayer_session(
 /// Экспортирует текущую кампанию во временный файл и возвращает путь
 #[tauri::command]
 #[specta::specta]
-pub async fn export_campaign_to_temp(
-    state: State<'_, AppState>,
-) -> Result<String, AppError> {
+pub async fn export_campaign_to_temp(state: State<'_, AppState>) -> Result<String, AppError> {
     let db = require_db(&state.campaign).await?;
 
     let db_path = db.path().to_path_buf();
@@ -509,12 +543,29 @@ pub async fn export_campaign_to_temp(
         return Err(AppError::Io("Campaign database not found".to_string()));
     }
 
-    let temp_path = std::env::temp_dir().join(format!(
-        "dndstudio_campaign_{}.db",
-        uuid::Uuid::new_v4()
-    ));
+    // Логируем размер оригинального файла
+    let original_size = std::fs::metadata(&db_path).map_err(AppError::io)?.len();
+    eprintln!(
+        "[export_campaign_to_temp] original db size: {} bytes",
+        original_size
+    );
 
-    std::fs::copy(&db_path, &temp_path).map_err(AppError::io)?;
+    // Используем VACUUM INTO для полной копии с WAL данными
+    let temp_path =
+        std::env::temp_dir().join(format!("dndstudio_campaign_{}.db", uuid::Uuid::new_v4()));
+
+    db.backup_to(&temp_path).await?;
+
+    // Логируем размер копии
+    let backup_size = std::fs::metadata(&temp_path).map_err(AppError::io)?.len();
+    eprintln!(
+        "[export_campaign_to_temp] backup size: {} bytes",
+        backup_size
+    );
+
+    if backup_size == 0 {
+        return Err(AppError::Io("Backup file is empty".to_string()));
+    }
 
     Ok(temp_path.to_string_lossy().to_string())
 }
@@ -531,4 +582,198 @@ pub async fn read_file_bytes(file_path: String) -> Result<Vec<u8>, AppError> {
 #[specta::specta]
 pub async fn delete_temp_file(file_path: String) -> Result<(), AppError> {
     std::fs::remove_file(&file_path).map_err(AppError::io)
+}
+
+/// Экспортирует активную кампанию как ZIP (db + assets) во временный файл.
+/// Используется для загрузки на Relay Server.
+#[tauri::command]
+#[specta::specta]
+pub async fn export_campaign_zip_to_temp(state: State<'_, AppState>) -> Result<String, AppError> {
+    let db = require_db(&state.campaign).await?;
+
+    let db_path = db.path().to_path_buf();
+
+    if !db_path.exists() {
+        return Err(AppError::Io("Campaign database not found".to_string()));
+    }
+
+    // Создаём временную копию БД через VACUUM INTO (включает WAL данные)
+    let temp_db_path =
+        std::env::temp_dir().join(format!("dndstudio_mp_db_{}.db", uuid::Uuid::new_v4()));
+
+    db.backup_to(&temp_db_path).await?;
+
+    let temp_db_size = fs::metadata(&temp_db_path).map_err(AppError::io)?.len();
+
+    eprintln!(
+        "[export_campaign_zip_to_temp] db backup size: {} bytes",
+        temp_db_size
+    );
+
+    // Создаём ZIP
+    let temp_zip_path =
+        std::env::temp_dir().join(format!("dndstudio_mp_{}.dndcampaign", uuid::Uuid::new_v4()));
+
+    let file = fs::File::create(&temp_zip_path).map_err(AppError::io)?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = SimpleFileOptions::default();
+
+    // 1. db.sqlite
+    zip.start_file("db.sqlite", options).map_err(AppError::io)?;
+
+    let mut db_file = fs::File::open(&temp_db_path).map_err(AppError::io)?;
+    let mut db_bytes = Vec::new();
+    db_file.read_to_end(&mut db_bytes).map_err(AppError::io)?;
+    zip.write_all(&db_bytes).map_err(AppError::io)?;
+
+    // Удаляем временный db
+    let _ = fs::remove_file(&temp_db_path);
+
+    // 2. assets/
+    let assets_dir = db.assets_dir();
+
+    if assets_dir.exists() && assets_dir.is_dir() {
+        add_dir_to_zip(&mut zip, &assets_dir, "assets", options)?;
+        eprintln!(
+            "[export_campaign_zip_to_temp] assets added from: {:?}",
+            assets_dir
+        );
+    } else {
+        eprintln!(
+            "[export_campaign_zip_to_temp] no assets dir found at: {:?}",
+            assets_dir
+        );
+    }
+
+    zip.finish().map_err(AppError::io)?;
+
+    let zip_size = fs::metadata(&temp_zip_path).map_err(AppError::io)?.len();
+
+    eprintln!(
+        "[export_campaign_zip_to_temp] final zip size: {} bytes",
+        zip_size
+    );
+
+    Ok(temp_zip_path.to_string_lossy().to_string())
+}
+
+/// Сохраняет мультиплеерную кампанию из ZIP (db + assets) в директорию профиля.
+#[tauri::command]
+#[specta::specta]
+pub async fn save_multiplayer_campaign_zip(
+    state: State<'_, AppState>,
+    paths: State<'_, AppPaths>,
+    room_id: String,
+    server_url: String,
+    role: String,
+    display_name: String,
+    zip_data: Vec<u8>,
+    profile_id: String,
+) -> Result<String, AppError> {
+    eprintln!(
+        "[save_multiplayer_campaign_zip] room={}, zip_size={} bytes",
+        room_id,
+        zip_data.len()
+    );
+
+    if zip_data.is_empty() {
+        return Err(AppError::Validation(
+            "Received empty campaign archive".to_string(),
+        ));
+    }
+
+    let dir = paths.session_dir(&profile_id, &room_id);
+    fs::create_dir_all(&dir).map_err(AppError::io)?;
+
+    // Открываем ZIP из памяти
+    let cursor = std::io::Cursor::new(zip_data);
+    let mut archive = zip::ZipArchive::new(cursor).map_err(AppError::io)?;
+
+    let db_path = paths.session_db_file(&profile_id, &room_id);
+
+    // Папка для ассетов: campaign.assets (рядом с campaign.db)
+    let assets_dir = dir.join("campaign.assets");
+
+    // Извлекаем файлы
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).map_err(AppError::io)?;
+        let name = file.name().to_string();
+
+        // Защита от path traversal
+        if name.contains("..") {
+            eprintln!("[save_multiplayer_campaign_zip] skipping unsafe path: {}", name);
+            continue;
+        }
+
+        if file.is_dir() {
+            continue;
+        }
+
+        if name == "db.sqlite" {
+            // Извлекаем БД
+            let mut bytes = Vec::new();
+            file.read_to_end(&mut bytes).map_err(AppError::io)?;
+
+            eprintln!(
+                "[save_multiplayer_campaign_zip] extracting db.sqlite: {} bytes",
+                bytes.len()
+            );
+
+            fs::write(&db_path, &bytes).map_err(AppError::io)?;
+        } else if let Some(relative) = name.strip_prefix("assets/") {
+            // Извлекаем ассеты в campaign.assets/
+            let dest_path = assets_dir.join(relative);
+
+            if let Some(parent) = dest_path.parent() {
+                fs::create_dir_all(parent).map_err(AppError::io)?;
+            }
+
+            let mut bytes = Vec::new();
+            file.read_to_end(&mut bytes).map_err(AppError::io)?;
+
+            eprintln!(
+                "[save_multiplayer_campaign_zip] extracting asset: {} ({} bytes)",
+                relative,
+                bytes.len()
+            );
+
+            fs::write(&dest_path, &bytes).map_err(AppError::io)?;
+        }
+    }
+
+    // Проверяем что БД извлеклась
+    if !db_path.exists() {
+        return Err(AppError::Validation(
+            "db.sqlite not found in archive".to_string(),
+        ));
+    }
+
+    // Открываем БД для обновления метаданных
+    let db = CampaignDb::open(&db_path).await?;
+    db.set_meta("profile_id", &profile_id).await?;
+    db.set_meta("room_id", &room_id).await?;
+    db.set_meta("server_url", &server_url).await?;
+    db.set_meta("role", &role).await?;
+    db.checkpoint().await?;
+    drop(db);
+
+    // Сохраняем session.json
+    let session_meta = serde_json::json!({
+        "room_id": room_id,
+        "server_url": server_url,
+        "role": role,
+        "display_name": display_name,
+        "profile_id": profile_id,
+        "connected_at": dnd_db::now_unix(),
+        "last_sync_at": dnd_db::now_unix(),
+    });
+
+    let session_path = paths.session_meta_file(&profile_id, &room_id);
+    fs::write(
+        &session_path,
+        serde_json::to_string_pretty(&session_meta).map_err(AppError::io)?,
+    )
+    .map_err(AppError::io)?;
+
+    Ok(db_path.to_string_lossy().to_string())
 }

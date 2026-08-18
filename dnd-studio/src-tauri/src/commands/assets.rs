@@ -235,6 +235,7 @@ pub async fn get_asset_thumb_path(
 }
 
 /// Возвращает содержимое ассета как data URL (base64)
+/// Возвращает содержимое ассета как data URL (base64)
 #[tauri::command]
 #[specta::specta]
 pub async fn get_asset_data_url(
@@ -253,6 +254,13 @@ pub async fn get_asset_data_url(
         .join(&asset.r#type)
         .join(format!("{}.webp", asset_id));
 
+    // Логирование для отладки
+    eprintln!("[get_asset_data_url] asset_id: {}", asset_id);
+    eprintln!("[get_asset_data_url] db.path(): {:?}", db.path());
+    eprintln!("[get_asset_data_url] assets_dir: {:?}", assets_dir);
+    eprintln!("[get_asset_data_url] file_path: {:?}", file_path);
+    eprintln!("[get_asset_data_url] file exists: {}", file_path.exists());
+
     if !file_path.exists() {
         return Err(AppError::NotFound);
     }
@@ -264,14 +272,10 @@ pub async fn get_asset_data_url(
 
     Ok(format!("data:image/webp;base64,{}", encoded))
 }
-
 /// Удаляет ассет
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_asset(
-    state: State<'_, AppState>,
-    asset_id: String,
-) -> Result<(), AppError> {
+pub async fn delete_asset(state: State<'_, AppState>, asset_id: String) -> Result<(), AppError> {
     let db = require_db(&state.campaign).await?;
 
     let asset = db

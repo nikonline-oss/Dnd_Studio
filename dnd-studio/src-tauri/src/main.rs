@@ -5,17 +5,17 @@ mod state;
 
 use commands::assets::{
     delete_asset, get_asset_data_url, get_asset_file_path, get_asset_thumb_path, import_asset,
-    list_assets, read_file_as_data_url,read_campaign_asset_data_url
+    list_assets, read_campaign_asset_data_url, read_file_as_data_url,
 };
 use commands::campaign::{
-    close_campaign, create_campaign, get_active_campaign, list_campaigns, open_campaign,
-    delete_campaign, get_campaign_assets_dir, rename_campaign
+    close_campaign, create_campaign, delete_campaign, get_active_campaign, get_campaign_assets_dir,
+    list_campaigns, open_campaign, rename_campaign,
 };
 use commands::campaign_io::{
     delete_multiplayer_session, delete_temp_file, export_campaign, export_campaign_to_temp,
-    import_campaign, list_multiplayer_sessions,
+    export_campaign_zip_to_temp, import_campaign, list_multiplayer_sessions,
     open_multiplayer_campaign, read_file_bytes, save_multiplayer_campaign,
-    update_multiplayer_session,
+    save_multiplayer_campaign_zip, update_multiplayer_session,
 };
 use commands::characters::{create_character, get_character, list_characters, update_character};
 use commands::compendiums::{
@@ -26,9 +26,7 @@ use commands::journal::{
     create_journal_entry, create_journal_link, delete_journal_entry, delete_journal_link,
     get_journal_entry, list_journal_entries, list_journal_links, update_journal_entry,
 };
-use commands::maps::{
-    create_map, get_map, import_map_image, list_maps, update_map_fog,
-};
+use commands::maps::{create_map, get_map, import_map_image, list_maps, update_map_fog};
 use commands::plugin_deps::{
     can_deactivate_plugin, can_uninstall_plugin, validate_plugin_dependencies,
 };
@@ -122,7 +120,9 @@ fn main() {
             touch_profile,
             get_campaign_assets_dir,
             rename_campaign,
-            delete_campaign
+            delete_campaign,
+            export_campaign_zip_to_temp,
+            save_multiplayer_campaign_zip,
         ]);
 
     #[cfg(debug_assertions)]

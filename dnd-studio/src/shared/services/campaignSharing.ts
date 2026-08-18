@@ -28,35 +28,48 @@ export async function uploadCampaignToRelay(
     config: CampaignSharingConfig,
     onProgress?: (percent: number) => void,
 ): Promise<void> {
-    // 1. Экспортируем кампанию во временный файл
-    const tempPath = await unwrap(commands.exportCampaignToTemp());
+    // 1. Экспортируем кампанию как ZIP (db + assets)
+    const tempZipPath = await unwrap(commands.exportCampaignZipToTemp());
+    console.log('[CampaignSharing] ZIP created:', tempZipPath);
 
-    // 2. Читаем файл
-    const fileData = await unwrap(commands.readFileBytes(tempPath));
+    // 2. Читаем ZIP
+    const zipData = await unwrap(commands.readFileBytes(tempZipPath));
+    console.log('[CampaignSharing] ZIP read, size:', zipData.length, 'bytes');
+
+    if (!zipData || zipData.length === 0) {
+        throw new Error('Exported campaign archive is empty');
+    }
 
     // 3. Загружаем на сервер
     const httpUrl = config.serverUrl.replace(/^ws/, 'http');
     const uploadUrl = `${httpUrl}/api/rooms/${config.roomId}/campaign`;
 
+    console.log('[CampaignSharing] Uploading ZIP to:', uploadUrl);
     onProgress?.(10);
+
+    const body = new Uint8Array(zipData);
 
     const response = await fetch(uploadUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/octet-stream',
-            'Authorization': `Bearer ${config.gmToken}`,
         },
-        body: new Uint8Array(fileData),
+        body,
     });
 
     onProgress?.(100);
 
     if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[CampaignSharing] Upload failed:', response.status, errorText);
         throw new Error(`Failed to upload campaign: ${response.statusText}`);
     }
 
-    // 4. Удаляем временный файл
-    await unwrap(commands.deleteTempFile(tempPath));
+    const result = await response.json();
+    console.log('[CampaignSharing] Upload success:', result);
+
+    // 4. Удаляем временный ZIP
+    await unwrap(commands.deleteTempFile(tempZipPath));
 }
 
 /**
@@ -74,6 +87,7 @@ export async function downloadAndOpenCampaign(
     const httpUrl = serverUrl.replace(/^ws/, 'http');
     const downloadUrl = `${httpUrl}/api/rooms/${roomId}/campaign`;
 
+    console.log('[CampaignSharing] Downloading from:', downloadUrl);
     onProgress?.(10);
 
     const response = await fetch(downloadUrl);
@@ -85,34 +99,43 @@ export async function downloadAndOpenCampaign(
     onProgress?.(40);
 
     const arrayBuffer = await response.arrayBuffer();
-    const fileData = Array.from(new Uint8Array(arrayBuffer));
+    const zipData = Array.from(new Uint8Array(arrayBuffer));
+
+    console.log('[CampaignSharing] Downloaded ZIP, size:', zipData.length, 'bytes');
+
+    if (!zipData || zipData.length === 0) {
+        throw new Error('Downloaded campaign archive is empty');
+    }
 
     onProgress?.(60);
 
-    // Сохраняем с profile_id
-    await unwrap(
-        commands.saveMultiplayerCampaign(
+    // Сохраняем ZIP и распаковываем (db + assets)
+    const savedPath = await unwrap(
+        commands.saveMultiplayerCampaignZip(
             roomId,
             serverUrl,
             role,
             displayName,
-            fileData,
+            zipData,
             profileId,
         ),
     );
 
+    console.log('[CampaignSharing] Saved to:', savedPath);
     onProgress?.(80);
 
-    // Открываем с profile_id
+    // Открываем мультиплеерную кампанию
     const campaign = await unwrap(
         commands.openMultiplayerCampaign(roomId, profileId),
     );
 
+    console.log('[CampaignSharing] Campaign opened:', campaign.name);
     onProgress?.(100);
 
     // Обновляем Zustand store
     useUiStore.getState().setActiveCampaign(campaign);
 }
+
 
 export async function getMultiplayerSessions(
     profileId: string,
