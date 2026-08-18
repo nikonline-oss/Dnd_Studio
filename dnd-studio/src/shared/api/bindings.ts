@@ -4,10 +4,15 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 
 /** Commands */
 export const commands = {
-	createCampaign: (name: string) => typedError<CampaignSummary, AppError>(__TAURI_INVOKE("create_campaign", { name })),
-	listCampaigns: () => typedError<CampaignSummary[], AppError>(__TAURI_INVOKE("list_campaigns")),
-	openCampaign: (id: string) => typedError<CampaignSummary, AppError>(__TAURI_INVOKE("open_campaign", { id })),
+	/**  Создаёт новую кампанию в директории профиля. */
+	createCampaign: (name: string, profileId: string) => typedError<CampaignSummary, AppError>(__TAURI_INVOKE("create_campaign", { name, profileId })),
+	/**  Возвращает список кампаний профиля. */
+	listCampaigns: (profileId: string) => typedError<CampaignSummary[], AppError>(__TAURI_INVOKE("list_campaigns", { profileId })),
+	/**  Открывает кампанию по ID. */
+	openCampaign: (campaignId: string, profileId: string) => typedError<CampaignSummary, AppError>(__TAURI_INVOKE("open_campaign", { campaignId, profileId })),
+	/**  Закрывает активную кампанию. */
 	closeCampaign: () => typedError<null, AppError>(__TAURI_INVOKE("close_campaign")),
+	/**  Возвращает активную кампанию. */
 	getActiveCampaign: () => typedError<{
 	id: string,
 	name: string,
@@ -69,6 +74,7 @@ export const commands = {
 } | null, AppError>(__TAURI_INVOKE("get_character", { id })),
 	updateCharacter: (id: string, name: string, characterType: string, dataJson: string) => typedError<CharacterDetail, AppError>(__TAURI_INVOKE("update_character", { id, name, characterType, dataJson })),
 	importMapImage: (mapId: string, sourcePath: string, options: MapImageImportOptions) => typedError<MapSummary, AppError>(__TAURI_INVOKE("import_map_image", { mapId, sourcePath, options })),
+	/**  Читает файл кампании из директории профиля и возвращает как data URL */
 	readCampaignAssetDataUrl: (relativePath: string) => typedError<string, AppError>(__TAURI_INVOKE("read_campaign_asset_data_url", { relativePath })),
 	updateMapFog: (mapId: string, fogData: string | null) => typedError<null, AppError>(__TAURI_INVOKE("update_map_fog", { mapId, fogData })),
 	listCompendiums: () => typedError<CompendiumSummary[], AppError>(__TAURI_INVOKE("list_compendiums")),
@@ -81,8 +87,8 @@ export const commands = {
 	deleteCompendiumEntry: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_compendium_entry", { id })),
 	/**  Экспорт активной кампании в файл .dndcampaign (ZIP) */
 	exportCampaign: (destinationPath: string) => typedError<null, AppError>(__TAURI_INVOKE("export_campaign", { destinationPath })),
-	/**  Импорт кампании из файла .dndcampaign (ZIP) */
-	importCampaign: (sourcePath: string) => typedError<CampaignSummary, AppError>(__TAURI_INVOKE("import_campaign", { sourcePath })),
+	/**  Импорт кампании из файла .dndcampaign в профиль */
+	importCampaign: (sourcePath: string, profileId: string) => typedError<CampaignSummary, AppError>(__TAURI_INVOKE("import_campaign", { sourcePath, profileId })),
 	installPluginFromFile: (sourcePath: string) => typedError<InstalledPluginSummary, AppError>(__TAURI_INVOKE("install_plugin_from_file", { sourcePath })),
 	listInstalledPlugins: () => typedError<InstalledPluginSummary[], AppError>(__TAURI_INVOKE("list_installed_plugins")),
 	setPluginActive: (pluginId: string, isActive: boolean) => typedError<InstalledPluginSummary, AppError>(__TAURI_INVOKE("set_plugin_active", { pluginId, isActive })),
@@ -134,10 +140,32 @@ export const commands = {
 	exportCampaignToTemp: () => typedError<string, AppError>(__TAURI_INVOKE("export_campaign_to_temp")),
 	/**  Читает файл и возвращает его содержимое как массив байтов */
 	readFileBytes: (filePath: string) => typedError<number[], AppError>(__TAURI_INVOKE("read_file_bytes", { filePath })),
-	/**  Импортирует кампанию из массива байтов и открывает её */
-	importCampaignFromBytes: (fileData: number[]) => typedError<string, AppError>(__TAURI_INVOKE("import_campaign_from_bytes", { fileData })),
 	/**  Удаляет временный файл */
 	deleteTempFile: (filePath: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_temp_file", { filePath })),
+	/**  Удаляет мультиплеерную сессию */
+	deleteMultiplayerSession: (roomId: string, profileId: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_multiplayer_session", { roomId, profileId })),
+	/**  Возвращает список сохранённых мультиплеерных сессий профиля */
+	listMultiplayerSessions: (profileId: string) => typedError<MultiplayerSessionInfo[], AppError>(__TAURI_INVOKE("list_multiplayer_sessions", { profileId })),
+	/**  Обновляет session.json при переподключении */
+	updateMultiplayerSession: (roomId: string, serverUrl: string, role: string, displayName: string, profileId: string) => typedError<null, AppError>(__TAURI_INVOKE("update_multiplayer_session", { roomId, serverUrl, role, displayName, profileId })),
+	/**  Сохраняет кампанию в изолированную директорию мультиплеера профиля */
+	saveMultiplayerCampaign: (roomId: string, serverUrl: string, role: string, displayName: string, fileData: number[], profileId: string) => typedError<string, AppError>(__TAURI_INVOKE("save_multiplayer_campaign", { roomId, serverUrl, role, displayName, fileData, profileId })),
+	/**  Открывает мультиплеерную кампанию по room_id */
+	openMultiplayerCampaign: (roomId: string, profileId: string) => typedError<CampaignSummary, AppError>(__TAURI_INVOKE("open_multiplayer_campaign", { roomId, profileId })),
+	/**  Создать новый профиль */
+	createProfile: (name: string) => typedError<ProfileInfo, AppError>(__TAURI_INVOKE("create_profile", { name })),
+	/**  Удалить профиль */
+	deleteProfile: (profileId: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_profile", { profileId })),
+	/**  Список всех профилей */
+	listProfiles: () => typedError<ProfileInfo[], AppError>(__TAURI_INVOKE("list_profiles")),
+	/**  Обновить last_active_at профиля */
+	touchProfile: (profileId: string) => typedError<null, AppError>(__TAURI_INVOKE("touch_profile", { profileId })),
+	/**  Возвращает путь к директории ассетов активной кампании. */
+	getCampaignAssetsDir: () => typedError<string, AppError>(__TAURI_INVOKE("get_campaign_assets_dir")),
+	/**  Переименовывает кампанию. */
+	renameCampaign: (campaignId: string, newName: string, profileId: string) => typedError<CampaignSummary, AppError>(__TAURI_INVOKE("rename_campaign", { campaignId, newName, profileId })),
+	/**  Удаляет кампанию. */
+	deleteCampaign: (campaignId: string, profileId: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_campaign", { campaignId, profileId })),
 };
 
 /* Types */
@@ -294,6 +322,15 @@ export type MapSummary = {
 	fogData: string | null,
 };
 
+export type MultiplayerSessionInfo = {
+	roomId: string,
+	serverUrl: string,
+	role: string,
+	displayName: string,
+	connectedAt: number,
+	lastSyncAt: number,
+};
+
 export type PluginSheetInfo = {
 	pluginId: string,
 	sheetKey: string,
@@ -305,6 +342,15 @@ export type PluginThemeInfo = {
 	pluginId: string,
 	themeKey: string,
 	filePath: string,
+};
+
+/**  Информация о профиле */
+export type ProfileInfo = {
+	id: string,
+	name: string,
+	avatarPath: string | null,
+	createdAt: number,
+	lastActiveAt: number,
 };
 
 export type TokenSummary = {

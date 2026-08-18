@@ -340,6 +340,17 @@ pub struct LinkTypeInfo {
 // Ошибки
 // ============================================
 
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct MultiplayerSessionInfo {
+    pub room_id: String,
+    pub server_url: String,
+    pub role: String,
+    pub display_name: String,
+    pub connected_at: i32,
+    pub last_sync_at: i32,
+}
+
 #[derive(Debug, thiserror::Error, Serialize, specta::Type)]
 #[serde(tag = "kind", content = "message")]
 pub enum AppError {

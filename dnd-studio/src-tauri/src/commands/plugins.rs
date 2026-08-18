@@ -106,6 +106,7 @@ async fn import_plugin_compendiums(
 
     Ok(())
 }
+
 #[tauri::command]
 #[specta::specta]
 pub async fn install_plugin_from_file(
@@ -160,11 +161,7 @@ pub async fn install_plugin_from_file(
     let should_activate = dep_result.all_satisfied;
 
     // Распаковываем плагин
-    let plugin_root = paths
-        .data_dir
-        .join("plugins")
-        .join(&manifest.id)
-        .join(&manifest.version);
+    let plugin_root = paths.plugins_dir.join(&manifest.id).join(&manifest.version);
 
     fs::create_dir_all(&plugin_root).map_err(AppError::io)?;
 
@@ -298,7 +295,7 @@ pub async fn uninstall_plugin(
     db.delete_installed_plugin(&plugin_id).await?;
 
     // Удаляем файлы плагина
-    let plugin_dir = paths.data_dir.join("plugins").join(&plugin_id);
+    let plugin_dir = paths.plugins_dir.join(&plugin_id);
     if plugin_dir.exists() {
         fs::remove_dir_all(&plugin_dir).map_err(AppError::io)?;
     }
@@ -329,8 +326,7 @@ pub async fn list_plugin_sheets(
             serde_json::from_str(&plugin.manifest_json).map_err(AppError::io)?;
 
         let plugin_root = paths
-            .data_dir
-            .join("plugins")
+            .plugins_dir
             .join(&plugin.plugin_id)
             .join(&plugin.version);
 
@@ -382,11 +378,7 @@ pub async fn get_plugin_sheet(
         .find(|s| s.key == sheet_key)
         .ok_or(AppError::NotFound)?;
 
-    let plugin_root = paths
-        .data_dir
-        .join("plugins")
-        .join(&plugin_id)
-        .join(&plugin.version);
+    let plugin_root = paths.plugins_dir.join(&plugin_id).join(&plugin.version);
 
     let file_path = plugin_root.join(&sheet_ref.file);
 
@@ -424,8 +416,7 @@ pub async fn list_plugin_themes(
             serde_json::from_str(&plugin.manifest_json).map_err(AppError::io)?;
 
         let plugin_root = paths
-            .data_dir
-            .join("plugins")
+            .plugins_dir
             .join(&plugin.plugin_id)
             .join(&plugin.version);
 
@@ -472,11 +463,7 @@ pub async fn get_plugin_theme_css(
         .find(|t| t.key == theme_key)
         .ok_or(AppError::NotFound)?;
 
-    let plugin_root = paths
-        .data_dir
-        .join("plugins")
-        .join(&plugin_id)
-        .join(&plugin.version);
+    let plugin_root = paths.plugins_dir.join(&plugin_id).join(&plugin.version);
 
     let file_path = plugin_root.join(&theme_ref.file);
 
@@ -630,11 +617,7 @@ pub async fn install_builtin_plugin(
 
     let manifest_json = serde_json::to_string(&manifest).map_err(AppError::io)?;
 
-    let plugin_root = paths
-        .data_dir
-        .join("plugins")
-        .join(&manifest.id)
-        .join(&manifest.version);
+    let plugin_root = paths.plugins_dir.join(&manifest.id).join(&manifest.version);
 
     fs::create_dir_all(&plugin_root).map_err(AppError::io)?;
 

@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { relayClient } from '../../shared/services/relayClient';
 import { useUiStore } from '../../shared/stores/ui';
-import { checkCampaignAvailability, downloadCampaignFromRelay, uploadCampaignToRelay } from '../../shared/services/campaignSharing';
+import { checkCampaignAvailability, deleteMultiplayerSession, downloadAndOpenCampaign, getMultiplayerSessions, MultiplayerSession, uploadCampaignToRelay } from '../../shared/services/campaignSharing';
+import { MultiplayerSessionInfo } from '../../shared/api/bindings';
+import { useOpenMultiplayerCampaign } from '../../shared/api/hooks';
 
 export function ConnectionPanel() {
     const connectionStatus = useUiStore((state) => state.connectionStatus);
@@ -11,15 +13,20 @@ export function ConnectionPanel() {
     const [serverUrl, setServerUrl] = useState('ws://localhost:3001');
     const [roomId, setRoomId] = useState('');
     const [token, setToken] = useState('');
-    const [displayName, setDisplayName] = useState('');
+
+    const activeProfileName = useUiStore((state) => state.activeProfileName);
+    const [displayName, setDisplayName] = useState(activeProfileName || '');
     const [roomName, setRoomName] = useState('');
     const [accessCode, setAccessCode] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [savedSessions, setSavedSessions] = useState<MultiplayerSessionInfo[]>([]);
     const [createdRoom, setCreatedRoom] = useState<{
         room_id: string;
         gm_token: string;
         access_code?: string;
     } | null>(null);
+    const activeProfileId = useUiStore((state) => state.activeProfileId);
+    const openMultiplayerCampaign = useOpenMultiplayerCampaign();
 
     const isConnected = connectionStatus === 'connected';
     const isConnecting = connectionStatus === 'connecting';
@@ -29,12 +36,75 @@ export function ConnectionPanel() {
     const [uploadProgress, setUploadProgress] = useState<number | null>(null);
     const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
 
+    // Инициализация displayName из профиля
+
+    useEffect(() => {
+        getMultiplayerSessions(activeProfileId!)
+            .then(setSavedSessions)
+            .catch(console.error);
+    }, []);
+
+    const handleDeleteSession = async (roomId: string) => {
+        if (!window.confirm('Delete this saved session?')) return;
+
+        try {
+            await deleteMultiplayerSession(roomId, activeProfileId!);
+            setSavedSessions((prev) => prev.filter((s) => s.roomId !== roomId));
+        } catch (e) {
+            console.error('Failed to delete session', e);
+        }
+    };
+
+    const handleJoinRoom = async () => {
+        setError(null);
+        setDownloadProgress(null);
+
+        if (!activeProfileId) {
+            setError('No active profile. Please select a profile first.');
+            return;
+        }
+
+        try {
+            const campaignInfo = await checkCampaignAvailability(serverUrl, roomId);
+
+            if (campaignInfo.hasCampaign) {
+                setDownloadProgress(0);
+
+                // Используем новый метод с profile_id
+                await downloadAndOpenCampaign(
+                    serverUrl,
+                    roomId,
+                    'player',
+                    displayName || 'Player',
+                    activeProfileId,  // Передать profile_id
+                    (percent) => setDownloadProgress(percent),
+                );
+
+                setDownloadProgress(null);
+            }
+
+            await relayClient.connect({
+                serverUrl,
+                roomId,
+                token,
+                displayName: displayName || 'Player',
+            });
+        } catch (e) {
+            setDownloadProgress(null);
+            setError(e instanceof Error ? e.message : 'Connection failed');
+        }
+    };
+
     const handleCreateRoom = async () => {
         setError(null);
         setUploadProgress(null);
 
+        if (!activeProfileId) {
+            setError('No active profile. Please select a profile first.');
+            return;
+        }
+
         try {
-            // 1. Создаём комнату на сервере
             const response = await fetch(`${serverUrl.replace(/^ws/, 'http')}/api/rooms`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -53,19 +123,18 @@ export function ConnectionPanel() {
             const data = await response.json();
             setCreatedRoom(data);
 
-            // 2. Загружаем кампанию на сервер
             setUploadProgress(0);
             await uploadCampaignToRelay(
                 {
                     serverUrl,
                     roomId: data.room_id,
                     gmToken: data.gm_token,
+                    displayName: displayName || 'GM',
                 },
                 (percent) => setUploadProgress(percent),
             );
             setUploadProgress(null);
 
-            // 3. Подключаемся как GM
             await relayClient.connect({
                 serverUrl,
                 roomId: data.room_id,
@@ -75,41 +144,6 @@ export function ConnectionPanel() {
         } catch (e) {
             setUploadProgress(null);
             setError(e instanceof Error ? e.message : 'Unknown error');
-        }
-    };
-
-    const handleJoinRoom = async () => {
-        setError(null);
-        setDownloadProgress(null);
-
-        try {
-            // 1. Проверяем доступность кампании
-            const campaignInfo = await checkCampaignAvailability(serverUrl, roomId);
-
-            if (campaignInfo.hasCampaign) {
-                // 2. Скачиваем кампанию
-                setDownloadProgress(0);
-                await downloadCampaignFromRelay(
-                    serverUrl,
-                    roomId,
-                    (percent) => setDownloadProgress(percent),
-                );
-                setDownloadProgress(null);
-
-                // TODO: Открыть скачанную кампанию
-                // Здесь нужно вызвать команду для открытия кампании
-            }
-
-            // 3. Подключаемся
-            await relayClient.connect({
-                serverUrl,
-                roomId,
-                token,
-                displayName: displayName || 'Player',
-            });
-        } catch (e) {
-            setDownloadProgress(null);
-            setError(e instanceof Error ? e.message : 'Connection failed');
         }
     };
 
@@ -341,6 +375,31 @@ export function ConnectionPanel() {
                         {isConnecting ? 'Creating…' : 'Create & Join'}
                     </button>
                 </>
+            )}
+            {savedSessions.length > 0 && (
+                <div className="saved-sessions">
+                    <h4>Saved Sessions</h4>
+                    {savedSessions.map((session) => (
+                        <div key={session.roomId} className="saved-session-item">
+                            <div className="saved-session-info">
+                                <span className="saved-session-name">
+                                    Room: {session.roomId.slice(0, 8)}…
+                                </span>
+                                <span className="saved-session-meta">
+                                    {session.role} · {new Date(session.lastSyncAt * 1000).toLocaleDateString()}
+                                </span>
+                            </div>
+                            <button
+                                type="button"
+                                className="icon-btn icon-btn-danger"
+                                onClick={() => handleDeleteSession(session.roomId)}
+                                title="Delete session"
+                            >
+                                🗑️
+                            </button>
+                        </div>
+                    ))}
+                </div>
             )}
         </div>
     );

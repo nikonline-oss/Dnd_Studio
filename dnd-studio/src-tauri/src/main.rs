@@ -5,14 +5,17 @@ mod state;
 
 use commands::assets::{
     delete_asset, get_asset_data_url, get_asset_file_path, get_asset_thumb_path, import_asset,
-    list_assets, read_file_as_data_url,
+    list_assets, read_file_as_data_url,read_campaign_asset_data_url
 };
 use commands::campaign::{
     close_campaign, create_campaign, get_active_campaign, list_campaigns, open_campaign,
+    delete_campaign, get_campaign_assets_dir, rename_campaign
 };
 use commands::campaign_io::{
-    delete_temp_file, export_campaign, export_campaign_to_temp, import_campaign,
-    import_campaign_from_bytes, read_file_bytes,
+    delete_multiplayer_session, delete_temp_file, export_campaign, export_campaign_to_temp,
+    import_campaign, list_multiplayer_sessions,
+    open_multiplayer_campaign, read_file_bytes, save_multiplayer_campaign,
+    update_multiplayer_session,
 };
 use commands::characters::{create_character, get_character, list_characters, update_character};
 use commands::compendiums::{
@@ -24,7 +27,7 @@ use commands::journal::{
     get_journal_entry, list_journal_entries, list_journal_links, update_journal_entry,
 };
 use commands::maps::{
-    create_map, get_map, import_map_image, list_maps, read_campaign_asset_data_url, update_map_fog,
+    create_map, get_map, import_map_image, list_maps, update_map_fog,
 };
 use commands::plugin_deps::{
     can_deactivate_plugin, can_uninstall_plugin, validate_plugin_dependencies,
@@ -34,6 +37,7 @@ use commands::plugins::{
     list_installed_plugins, list_link_types, list_plugin_sheets, list_plugin_themes,
     set_plugin_active, uninstall_plugin,
 };
+use commands::profiles::{create_profile, delete_profile, list_profiles, touch_profile};
 use commands::tokens::{
     assign_token_character, create_token, delete_token, list_tokens, move_token,
 };
@@ -106,8 +110,19 @@ fn main() {
             can_uninstall_plugin,
             export_campaign_to_temp,
             read_file_bytes,
-            import_campaign_from_bytes,
-            delete_temp_file
+            delete_temp_file,
+            delete_multiplayer_session,
+            list_multiplayer_sessions,
+            update_multiplayer_session,
+            save_multiplayer_campaign,
+            open_multiplayer_campaign,
+            create_profile,
+            delete_profile,
+            list_profiles,
+            touch_profile,
+            get_campaign_assets_dir,
+            rename_campaign,
+            delete_campaign
         ]);
 
     #[cfg(debug_assertions)]
@@ -126,16 +141,10 @@ fn main() {
         .manage(AppState::default())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
-            let campaigns_dir = data_dir.join("campaigns");
-            std::fs::create_dir_all(&campaigns_dir)?;
 
-            let index_file = data_dir.join("campaign-index.json");
+            let paths = AppPaths::new(data_dir);
 
-            app.manage(AppPaths {
-                data_dir,
-                campaigns_dir,
-                index_file,
-            });
+            app.manage(paths);
 
             Ok(())
         })

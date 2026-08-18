@@ -8,6 +8,7 @@ pub mod campaign_io;
 pub mod plugins;
 pub mod assets;
 pub mod plugin_deps;
+pub mod profiles;
 
 use dnd_core::AppError;
 use dnd_db::CampaignDb;

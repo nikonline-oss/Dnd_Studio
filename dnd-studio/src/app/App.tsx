@@ -10,15 +10,21 @@ import { logDebug } from '../shared/lib/debug';
 import { useWorkspaceStore } from '../shared/stores/workspace';
 import { usePluginTheme } from '../shared/hooks/usePluginTheme';
 import { useMultiplayerSync } from '../shared/hooks/useMultiplayerSync';
+import { useUiStore } from '../shared/stores/ui';
+import { ProfileSelectScreen } from '../features/profile/ProfileSelectScreen';
+import { StartScreen } from '../features/campaign-start/StartScreen';
 
 export default function App() {
   const workspaceReady = useWorkspaceStore.persist.hasHydrated();
+  const activeProfileId = useUiStore((state) => state.activeProfileId);
+  const activeCampaign = useUiStore((state) => state.activeCampaign);
 
   useThemeEffect();
   usePluginTheme();
   useGlobalShortcuts();
   useMultiplayerSync();
   useAutoOpenLastCampaign(workspaceReady);
+
 
   const {
     isDragging,
@@ -63,6 +69,9 @@ export default function App() {
     };
   }, [workspaceReady]);
 
+  if (!activeProfileId) {
+    return <ProfileSelectScreen />;
+  }
   if (!workspaceReady) {
     return (
       <main className="center-area">

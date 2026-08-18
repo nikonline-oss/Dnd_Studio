@@ -110,7 +110,34 @@ impl CampaignDb {
 
         Ok(id)
     }
+    /// Создаёт дефолтный мир для карт (если ещё нет).
+    pub async fn create_default_world(&self) -> Result<(), AppError> {
+        // Проверяем, есть ли уже миры
+        let count = sqlx::query_scalar::<_, i32>("SELECT COUNT(*) FROM worlds")
+            .fetch_one(&self.pool)
+            .await
+            .map_err(AppError::db)?;
 
+        if count > 0 {
+            return Ok(());
+        }
+
+        // Создаём дефолтный мир
+        let id = uuid::Uuid::new_v4().to_string();
+
+        sqlx::query(
+            r#"
+            INSERT INTO worlds (id, name, description, sort_order, version)
+            VALUES (?, 'Default World', 'Default world for maps', 0, 0)
+            "#,
+        )
+        .bind(&id)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(())
+    }
     // ============================================
     // maps
     // ============================================
@@ -981,15 +1008,17 @@ impl CampaignDb {
     // ============================================
 
     pub fn assets_dir(&self) -> PathBuf {
-        let parent = self.path.parent().unwrap_or_else(|| Path::new(""));
-
         let stem = self
             .path
             .file_stem()
-            .and_then(|value| value.to_str())
-            .unwrap_or("campaign");
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
 
-        parent.join(format!("{stem}.assets"))
+        self.path
+            .parent()
+            .unwrap_or(Path::new("."))
+            .join(format!("{}.assets", stem))
     }
 
     pub fn resolve_asset_path(&self, relative_path: &str) -> Result<PathBuf, AppError> {
@@ -1745,10 +1774,46 @@ impl CampaignDb {
             .ok_or(AppError::NotFound)
     }
 
+    /// Синхронный метод для получения ассета по ID
+    /// Рекомендуется использовать async версию `get_asset_async`
     pub fn get_asset(&self, id: &str) -> Result<Option<dnd_core::AssetSummary>, AppError> {
-        // Синхронный метод для использования в async контексте через block_on
-        // В реальном коде лучше сделать async
-        unimplemented!("Use async version")
+        // Используем tokio::task::block_in_place для выполнения async кода
+        // Это безопасно, так как мы уже в async runtime
+        let pool = self.pool.clone();
+        let id = id.to_string();
+
+        let handle = tokio::runtime::Handle::current();
+        handle.block_on(async {
+            let row = sqlx::query_as::<
+                _,
+                (
+                    String,
+                    String,
+                    String,
+                    String,
+                    String,
+                    i32,
+                    Option<i32>,
+                    Option<i32>,
+                    Option<String>,
+                    i32,
+                ),
+            >(
+                r#"
+            SELECT
+                id, type, filename, content_hash, mime_type,
+                size_bytes, width, height, thumb_filename, created_at
+            FROM assets
+            WHERE id = ?
+            "#,
+            )
+            .bind(&id)
+            .fetch_optional(&pool)
+            .await
+            .map_err(AppError::db)?;
+
+            Ok(row.map(row_to_asset))
+        })
     }
 
     pub async fn get_asset_by_hash(
@@ -2144,6 +2209,26 @@ impl CampaignIndexStore {
         self.save(&campaigns)?;
 
         Ok(campaigns)
+    }
+
+    pub fn list(&self) -> Result<Vec<CampaignSummary>, AppError> {
+        self.load()
+    }
+
+    /// Удаляет кампанию по ID
+    pub fn remove(&self, id: &str) -> Result<(), AppError> {
+        let mut campaigns = self.load()?;
+
+        let initial_len = campaigns.len();
+        campaigns.retain(|c| c.id != id);
+
+        if campaigns.len() == initial_len {
+            return Err(AppError::NotFound);
+        }
+
+        self.save(&campaigns)?;
+
+        Ok(())
     }
 }
 

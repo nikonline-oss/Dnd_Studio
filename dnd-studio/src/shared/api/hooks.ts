@@ -3,6 +3,7 @@ import { commands, TokenSummary } from './bindings';
 import { useWorkspaceStore } from '../stores/workspace';
 import { logError } from '../lib/debug';
 import type { QueryClient } from '@tanstack/react-query';
+import { useUiStore } from '../stores/ui';
 
 function invalidatePluginRelatedData(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ['plugins'] });
@@ -37,13 +38,6 @@ export async function unwrap<T, E extends { kind: string; message?: string }>(
   throw new Error(`[${error.kind}] ${message}`);
 }
 
-export function useCampaigns() {
-  return useQuery({
-    queryKey: ['campaigns'],
-    queryFn: () => unwrap(commands.listCampaigns()),
-  });
-}
-
 export function useActiveCampaign() {
   return useQuery({
     queryKey: ['activeCampaign'],
@@ -52,13 +46,13 @@ export function useActiveCampaign() {
   });
 }
 
-export function useCreateCampaign() {
+export function useCreateCampaign(profileId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (name: string) => unwrap(commands.createCampaign(name)),
+    mutationFn: (name: string) => unwrap(commands.createCampaign(name, profileId)),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['campaigns', profileId] });
       queryClient.invalidateQueries({ queryKey: ['activeCampaign'] });
     },
     onError: (error: Error) => {
@@ -67,13 +61,13 @@ export function useCreateCampaign() {
   });
 }
 
-export function useOpenCampaign() {
+export function useOpenCampaign(profileId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => unwrap(commands.openCampaign(id)),
+    mutationFn: (id: string) => unwrap(commands.openCampaign(id, profileId)),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['campaigns', profileId] });
       queryClient.invalidateQueries({ queryKey: ['activeCampaign'] });
     },
     onError: (error: Error) => {
@@ -736,18 +730,40 @@ export function useImportCampaign() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (sourcePath: string) =>
-      unwrap(commands.importCampaign(sourcePath)),
+    mutationFn: ({
+      sourcePath,
+      profileId,
+    }: {
+      sourcePath: string;
+      profileId: string;
+    }) => unwrap(commands.importCampaign(sourcePath, profileId)),
 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['campaigns'] });
       queryClient.invalidateQueries({ queryKey: ['activeCampaign'] });
-      queryClient.invalidateQueries({ queryKey: ['maps'] });
     },
 
     onError: (error) => {
       logError('api', 'import campaign failed', error);
     },
+  });
+}
+
+export function useCampaigns(profileId: string | null) {
+  return useQuery({
+    queryKey: ['campaigns', profileId],
+    queryFn: () => unwrap(commands.listCampaigns(profileId!)),
+    enabled: Boolean(profileId),
+    retry: false,
+  });
+}
+
+export function useMultiplayerSessions(profileId: string | null) {
+  return useQuery({
+    queryKey: ['multiplayerSessions', profileId],
+    queryFn: () => unwrap(commands.listMultiplayerSessions(profileId!)),
+    enabled: Boolean(profileId),
+    retry: false,
   });
 }
 
@@ -1072,6 +1088,80 @@ export function useCanUninstallPlugin() {
 
     onError: (error) => {
       logError('api', 'can uninstall plugin check failed', error);
+    },
+  });
+}
+
+export function useProfiles() {
+  return useQuery({
+    queryKey: ['profiles'],
+    queryFn: () => unwrap(commands.listProfiles()),
+    retry: false,
+  });
+}
+
+export function useCreateProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (name: string) => unwrap(commands.createProfile(name)),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profiles'] });
+    },
+
+    onError: (error) => {
+      logError('api', 'create profile failed', error);
+    },
+  });
+}
+
+export function useDeleteProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (profileId: string) => unwrap(commands.deleteProfile(profileId)),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profiles'] });
+    },
+
+    onError: (error) => {
+      logError('api', 'delete profile failed', error);
+    },
+  });
+}
+
+export function useTouchProfile() {
+  return useMutation({
+    mutationFn: (profileId: string) => unwrap(commands.touchProfile(profileId)),
+
+    onError: (error) => {
+      logError('api', 'touch profile failed', error);
+    },
+  });
+}
+
+export function useOpenMultiplayerCampaign() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ roomId, profileId }: { roomId: string; profileId: string }) =>
+      unwrap(commands.openMultiplayerCampaign(roomId, profileId)),
+
+    onSuccess: (campaign) => {
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['activeCampaign'] });
+      queryClient.invalidateQueries({ queryKey: ['maps'] });
+      queryClient.invalidateQueries({ queryKey: ['characters'] });
+      queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
+
+      // Обновляем Zustand store
+      useUiStore.getState().setActiveCampaign(campaign);
+    },
+
+    onError: (error) => {
+      logError('api', 'open multiplayer campaign failed', error);
     },
   });
 }

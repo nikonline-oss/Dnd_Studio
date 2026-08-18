@@ -2,13 +2,16 @@ import { FormEvent, useState } from 'react';
 import { useCampaigns, useCreateCampaign, useOpenCampaign } from '../../shared/api/hooks';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useImportCampaign } from '../../shared/api/hooks';
+import { useUiStore } from '../../shared/stores/ui';
 
 export function StartScreen() {
   const [name, setName] = useState('');
 
-  const { data: campaigns = [], isLoading } = useCampaigns();
-  const createCampaign = useCreateCampaign();
-  const openCampaign = useOpenCampaign();
+  const activeProfileId = useUiStore((state) => state.activeProfileId);
+
+  const { data: campaigns = [], isLoading } = useCampaigns(activeProfileId!);
+  const createCampaign = useCreateCampaign(activeProfileId!);
+  const openCampaign = useOpenCampaign(activeProfileId!);
 
   const importCampaign = useImportCampaign();
 
@@ -25,7 +28,10 @@ export function StartScreen() {
       });
 
       if (typeof selected === 'string') {
-        importCampaign.mutate(selected);
+        importCampaign.mutate({
+          sourcePath: selected,
+          profileId: activeProfileId!,
+        });
       }
     } catch (error) {
       console.error('Import failed', error);

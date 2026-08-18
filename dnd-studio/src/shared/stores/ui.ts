@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 import { applyThemeMode, type ThemeMode } from '../theme/theme';
+import { CampaignSummary } from '../api/bindings';
 
 
 export type LeftTab = 'navigator' | 'plugins' | 'compendiums';
@@ -44,6 +45,13 @@ interface UiState {
 
   userRole: 'gm' | 'co_gm' | 'player' | 'spectator' | null;
   setUserRole: (role: 'gm' | 'co_gm' | 'player' | 'spectator' | null) => void;
+
+  activeProfileId: string | null;
+  activeProfileName: string | null;
+  setActiveProfile: (id: string | null, name: string | null) => void;
+
+  activeCampaign: CampaignSummary | null;
+  setActiveCampaign: (campaign: CampaignSummary | null) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -137,6 +145,16 @@ export const useUiStore = create<UiState>()(
 
       userRole: null,
       setUserRole: (userRole) => set({ userRole }),
+
+      activeProfileId: null,
+      activeProfileName: null,
+      setActiveProfile: (activeProfileId, activeProfileName) =>
+        set({ activeProfileId, activeProfileName }),
+
+      activeCampaign: null,
+      setActiveCampaign(activeCampaign) {
+        set({activeCampaign})
+      },
 
     }),
     {

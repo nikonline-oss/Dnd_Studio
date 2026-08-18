@@ -24,6 +24,16 @@ export function TopBar() {
   const pluginThemeId = useUiStore((state) => state.pluginThemeId);
   const setPluginThemeId = useUiStore((state) => state.setPluginThemeId);
 
+  const activeProfileId = useUiStore((state) => state.activeProfileId);
+  const activeProfileName = useUiStore((state) => state.activeProfileName);
+  const setActiveProfile = useUiStore((state) => state.setActiveProfile);
+
+  const handleSwitchProfile = () => {
+    if (window.confirm('Switch profile? Unsaved changes will be lost.')) {
+      setActiveProfile(null, null);
+    }
+  };
+
   const handleThemeChange = (value: string) => {
     if (value === 'system' || value === 'light' || value === 'dark') {
       setThemeMode(value);
@@ -113,6 +123,12 @@ export function TopBar() {
         <button type="button" onClick={toggleRight}>
           Right
         </button>
+        <div className="topbar-profile">
+          <span className="topbar-profile-name">{activeProfileName}</span>
+          <button type="button" onClick={handleSwitchProfile} title="Switch profile">
+            👤
+          </button>
+        </div>
 
         <select
           value={currentThemeValue}

@@ -1,8 +1,7 @@
 use crate::state::AppState;
-use crate::{commands::require_db, state::AppPaths};
+use crate::{commands::require_db};
 use base64::Engine;
 use dnd_core::{AppError, MapSummary};
-use std::path::Path;
 use tauri::State;
 
 #[tauri::command]
@@ -57,17 +56,14 @@ pub struct MapImageImportOptions {
 #[specta::specta]
 pub async fn import_map_image(
     state: State<'_, AppState>,
-    paths: State<'_, AppPaths>,
     map_id: String,
     source_path: String,
     options: MapImageImportOptions,
 ) -> Result<MapSummary, AppError> {
     let db = require_db(&state.campaign).await?;
 
-    // Проверяем, что карта существует
     db.get_map(&map_id).await?.ok_or(AppError::NotFound)?;
 
-    // Валидация параметров
     if options.target_width <= 0 || options.target_height <= 0 {
         return Err(AppError::Validation(
             "Target width and height must be positive".to_string(),
@@ -94,7 +90,6 @@ pub async fn import_map_image(
         let img_w = img.width();
         let img_h = img.height();
 
-        // Clamp crop к границам изображения вместо ошибки
         let cx = cx.min(img_w.saturating_sub(1));
         let cy = cy.min(img_h.saturating_sub(1));
         let cw = cw.min(img_w.saturating_sub(cx));
@@ -124,13 +119,10 @@ pub async fn import_map_image(
         .map_err(|e| AppError::Io(format!("Failed to save temp image: {}", e)))?;
 
     // Импортируем через asset pipeline
-    let asset = crate::commands::assets::import_asset_inner(
-        &db,
-        &paths,
-        &temp_path.to_string_lossy(),
-        "map",
-    )
-    .await?;
+    // Теперь используем db.assets_dir() вместо общей директории
+    let asset =
+        crate::commands::assets::import_asset_inner(&db, &temp_path.to_string_lossy(), "map")
+            .await?;
 
     // Удаляем временный файл
     let _ = std::fs::remove_file(&temp_path);
@@ -148,41 +140,6 @@ pub async fn import_map_image(
     .await?;
 
     db.get_map(&map_id).await?.ok_or(AppError::NotFound)
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn read_campaign_asset_data_url(
-    state: State<'_, AppState>,
-    relative_path: String,
-) -> Result<String, AppError> {
-    let db = require_db(&state.campaign).await?;
-
-    let path = db.resolve_asset_path(&relative_path)?;
-
-    if !path.exists() {
-        return Err(AppError::NotFound);
-    }
-
-    let bytes = std::fs::read(&path).map_err(AppError::io)?;
-
-    let extension = path
-        .extension()
-        .and_then(|value| value.to_str())
-        .map(|value| value.to_ascii_lowercase())
-        .unwrap_or_default();
-
-    let mime = match extension.as_str() {
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "webp" => "image/webp",
-        "gif" => "image/gif",
-        _ => "application/octet-stream",
-    };
-
-    let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
-
-    Ok(format!("data:{mime};base64,{encoded}"))
 }
 
 #[tauri::command]
