@@ -8,6 +8,9 @@ import { MapTab } from '../../features/map/MapTab';
 import { logDebug } from '../lib/debug';
 import { useWorkspaceStore } from '../stores/workspace';
 import { CompendiumTab } from '../../features/compendium/CompendiumTab';
+import { usePlayerVisibility } from '../../shared/hooks/usePlayerVisibility';
+import { WaitingForGM } from '../../features/multiplayer/WaitingForGM';
+import { useMaps } from '../../shared/api/hooks';
 
 import { WorkspaceTabBar } from './WorkspaceTabBar';
 
@@ -25,11 +28,20 @@ function WorkspaceEmpty() {
 function ActiveTabContent() {
   const tabs = useWorkspaceStore((state) => state.tabs);
   const activeTabId = useWorkspaceStore((state) => state.activeTabId);
+  const activeCampaign = useActiveCampaign();
+
+  const { data: maps = [] } = useMaps(Boolean(activeCampaign));
+  const { canSeeMap, isGM } = usePlayerVisibility();
+
+  const visibleMaps = maps.filter(canSeeMap);
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId);
 
   if (!activeTab) {
     return <WorkspaceEmpty />;
+  }
+  if (!isGM && visibleMaps.length === 0 && tabs.length === 0) {
+    return <WaitingForGM />;
   }
 
   if (activeTab.kind === 'map') {

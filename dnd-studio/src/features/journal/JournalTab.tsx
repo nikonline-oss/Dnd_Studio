@@ -13,6 +13,7 @@ import {
   useUpdateJournalEntry,
 } from '../../shared/api/hooks';
 import { useWorkspaceStore } from '../../shared/stores/workspace';
+import { usePlayerVisibility } from '../../shared/hooks/usePlayerVisibility';
 
 function MarkdownPreview({ content }: { content: string }) {
   const html = (() => {
@@ -41,6 +42,9 @@ export function JournalTab({ entryId }: { entryId?: string }) {
   const deleteEntry = useDeleteJournalEntry();
   const createLink = useCreateJournalLink();
   const deleteLink = useDeleteJournalLink();
+  const { canSeeJournalEntry, canEditJournalEntry } = usePlayerVisibility();
+
+  const visibleEntries = allEntries.filter(canSeeJournalEntry);
 
   const closeActiveTab = useWorkspaceStore((state) => state.closeActiveTab);
   const renameTabByEntity = useWorkspaceStore(
@@ -162,12 +166,12 @@ export function JournalTab({ entryId }: { entryId?: string }) {
   };
 
   const getEntryName = (id: string): string => {
-    const e = allEntries.find((x) => x.id === id);
+    const e = visibleEntries.find((x) => x.id === id);
     return e?.title ?? 'Unknown';
   };
 
   // Записи, которые можно линковать (исключая текущую)
-  const linkableEntries = allEntries.filter((e) => e.id !== entry.id);
+  const linkableEntries = visibleEntries.filter((e) => e.id !== entry.id);
 
   return (
     <div className="journal-tab">

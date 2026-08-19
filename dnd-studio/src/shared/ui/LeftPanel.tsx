@@ -20,6 +20,7 @@ import {
 } from '../api/hooks';
 import { useUiStore } from '../stores/ui';
 import { useWorkspaceStore } from '../stores/workspace';
+import { usePlayerVisibility } from '../../shared/hooks/usePlayerVisibility';
 
 
 function parsePluginManifest(rawJson: string): {
@@ -536,11 +537,15 @@ function NavigatorPanel() {
     'pc' | 'npc' | 'monster'
   >('pc');
 
+  const { canSeeMap, isGM } = usePlayerVisibility();
+
   const { data: activeCampaign } = useActiveCampaign();
 
   const { data: maps = [], isLoading: areMapsLoading } = useMaps(
     Boolean(activeCampaign),
   );
+
+  const visibleMaps = maps.filter(canSeeMap);
 
   const { data: characters = [], isLoading: areCharactersLoading } =
     useCharacters(Boolean(activeCampaign));
@@ -557,6 +562,14 @@ function NavigatorPanel() {
     return (
       <div className="empty-state">
         Open a campaign to see its navigator.
+      </div>
+    );
+  }
+
+  if (!isGM && visibleMaps.length === 0) {
+    return (
+      <div className="empty-state">
+        Waiting for GM to show a map…
       </div>
     );
   }
@@ -693,7 +706,7 @@ function NavigatorPanel() {
         )}
 
         <ul className="navigator-list">
-          {maps.map((map) => (
+          {visibleMaps.map((map) => (
             <li key={map.id}>
               <button
                 type="button"

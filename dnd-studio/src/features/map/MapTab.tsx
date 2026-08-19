@@ -18,6 +18,7 @@ import { MapCanvas } from './MapCanvas';
 import { MapImageImportDialog } from './MapImageImportDialog';
 import type { MapImageImportOptions } from '../../shared/api/hooks';
 import { useUiStore } from '../../shared/stores/ui';
+import { usePlayerVisibility } from '../../shared/hooks/usePlayerVisibility';
 
 export function MapTab({ mapId }: { mapId?: string }) {
   const { data: map, isLoading } = useMap(mapId);
@@ -28,9 +29,11 @@ export function MapTab({ mapId }: { mapId?: string }) {
   const moveToken = useMoveToken();
   const deleteToken = useDeleteToken();
   const importMapImage = useImportMapImage();
+  const { canSeeToken } = usePlayerVisibility();
 
   const showGridByMap = useMapSettingsStore((state) => state.showGridByMap);
   const toggleGrid = useMapSettingsStore((state) => state.toggleGrid);
+
 
   const setSelectedMapId = useTableStore((state) => state.setSelectedMapId);
   const setSelectedTokenIdGlobal = useTableStore(
@@ -134,9 +137,9 @@ export function MapTab({ mapId }: { mapId?: string }) {
     return <div className="workspace-empty">Map not found.</div>;
   }
 
-  const visibleTokens = tokens.filter(
-    (token) => !pendingDeleteTokenIds.includes(token.id),
-  );
+  const visibleTokens = tokens
+    .filter((token) => !pendingDeleteTokenIds.includes(token.id))
+    .filter((token) => canSeeToken(token));
 
   // Создание токена с отправкой в Relay
   const handleAddToken = () => {
