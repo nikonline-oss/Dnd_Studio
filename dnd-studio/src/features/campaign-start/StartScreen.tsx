@@ -123,19 +123,21 @@ export function StartScreen() {
                       {campaign.name}
                     </button>
                   </span>
-                  <div className="navigator-item-actions">
-                    <button
-                      type="button"
-                      className="icon-btn icon-btn-danger"
-                      title="Удалить кампанию"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPendingDelete({ id: campaign.id, name: campaign.name });
-                      }}
-                    >
-                      🗑️
-                    </button>
-                  </div>
+                  {activeProfileId && (
+                    <span className="navigator-item-delete-wrapper">
+                      <button
+                        type="button"
+                        className="icon-btn icon-btn-danger navigator-item-delete"
+                        title="Удалить кампанию"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPendingDelete({ id: campaign.id, name: campaign.name });
+                        }}
+                      >
+                        🗑️
+                      </button>
+                    </span>
+                  )}
                 </div>
               </li>
             ))}

@@ -1733,6 +1733,8 @@ select:focus-visible {
   background: var(--panel);
 }
 
+/* Navigator item delete button */
+
 /* Navigator item actions */
 
 .navigator-item-row {
@@ -3157,4 +3159,17 @@ select:focus-visible {
   display: flex;
   gap: 8px;
   margin-top: 8px;
+}
+
+/* Navigator item delete button */
+
+.navigator-item-delete-wrapper {
+  display: inline-flex;
+  max-width: 0;
+  overflow: hidden;
+  transition: max-width 0.25s ease;
+}
+
+.navigator-item-row:hover .navigator-item-delete-wrapper {
+  max-width: 36px;
 }

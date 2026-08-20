@@ -8,6 +8,7 @@ import {
   useCreateCharacter,
   useCreateCompendium,
   useCreateMap,
+  useDeleteCharacter,
   useDeleteCompendium,
   useDeleteMap,
   useInstallBuiltinPlugin,
@@ -542,6 +543,10 @@ function NavigatorPanel() {
     id: string;
     name: string;
   } | null>(null);
+  const [pendingDeleteCharacter, setPendingDeleteCharacter] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   const { canSeeMap, isGM } = usePlayerVisibility();
 
@@ -559,6 +564,7 @@ function NavigatorPanel() {
   const createMap = useCreateMap();
   const deleteMap = useDeleteMap();
   const createCharacter = useCreateCharacter();
+  const deleteCharacter = useDeleteCharacter();
 
   const openMapTab = useWorkspaceStore((state) => state.openMapTab);
   const openCharacterTab = useWorkspaceStore(
@@ -571,6 +577,16 @@ function NavigatorPanel() {
     deleteMap.mutate(pendingDeleteMap.id, {
       onSuccess: () => {
         setPendingDeleteMap(null);
+      },
+    });
+  };
+
+  const handleDeleteCharacter = () => {
+    if (!pendingDeleteCharacter) return;
+
+    deleteCharacter.mutate(pendingDeleteCharacter.id, {
+      onSuccess: () => {
+        setPendingDeleteCharacter(null);
       },
     });
   };
@@ -681,15 +697,34 @@ function NavigatorPanel() {
 
         <ul className="navigator-list">
           {characters.map((character) => (
-            <li key={character.id}>
+            <li key={character.id} className="navigator-item-row">
               <button
                 type="button"
-                className="navigator-item"
+                className="navigator-item navigator-item-grow"
                 onClick={() => openCharacterTab(character)}
               >
                 <span>{character.name}</span>
                 <small>{character.type.toUpperCase()}</small>
               </button>
+
+              {isGM && (
+                <span className="navigator-item-delete-wrapper">
+                  <button
+                    type="button"
+                    className="icon-btn icon-btn-danger navigator-item-delete"
+                    title="Удалить персонажа"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPendingDeleteCharacter({
+                        id: character.id,
+                        name: character.name,
+                      });
+                    }}
+                  >
+                    🗑️
+                  </button>
+                </span>
+              )}
             </li>
           ))}
         </ul>
@@ -736,19 +771,21 @@ function NavigatorPanel() {
                 </small>
               </button>
 
-              <div className="navigator-item-actions">
-                <button
-                  type="button"
-                  className="icon-btn icon-btn-danger"
-                  title="Удалить карту"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPendingDeleteMap({ id: map.id, name: map.name });
-                  }}
-                >
-                  🗑️
-                </button>
-              </div>
+              {isGM && (
+                <span className="navigator-item-delete-wrapper">
+                  <button
+                    type="button"
+                    className="icon-btn icon-btn-danger navigator-item-delete"
+                    title="Удалить карту"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPendingDeleteMap({ id: map.id, name: map.name });
+                    }}
+                  >
+                    🗑️
+                  </button>
+                </span>
+              )}
             </li>
           ))}
         </ul>
@@ -763,6 +800,17 @@ function NavigatorPanel() {
         destructive
         onConfirm={handleDeleteMap}
         onCancel={() => setPendingDeleteMap(null)}
+      />
+
+      <ConfirmDialog
+        open={pendingDeleteCharacter !== null}
+        title="Удаление персонажа"
+        message={`Вы уверены, что хотите удалить персонажа "${pendingDeleteCharacter?.name}"?`}
+        confirmLabel="Удалить"
+        cancelLabel="Отмена"
+        destructive
+        onConfirm={handleDeleteCharacter}
+        onCancel={() => setPendingDeleteCharacter(null)}
       />
     </div>
   );
