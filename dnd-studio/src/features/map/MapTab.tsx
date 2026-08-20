@@ -49,6 +49,8 @@ export function MapTab({ mapId }: { mapId?: string }) {
   const [selectedCharacterId, setSelectedCharacterId] = useState<string>('');
   const [pendingImagePath, setPendingImagePath] = useState<string | null>(null);
 
+  const globalSelectedTokenId = useTableStore((state) => state.selectedTokenId);
+  const setGlobalSelectedTokenId = useTableStore((state) => state.setSelectedTokenId);
   // ВСЕ ХУКИ useEffect И useCallback ДОЛЖНЫ БЫТЬ ЗДЕСЬ, ДО УСЛОВНЫХ ВОЗВРАТОВ
 
   useEffect(() => {
@@ -65,8 +67,10 @@ export function MapTab({ mapId }: { mapId?: string }) {
   }, [map?.id, setSelectedMapId, setSelectedTokenIdGlobal]);
 
   useEffect(() => {
-    setSelectedTokenIdGlobal(selectedTokenId);
-  }, [selectedTokenId, setSelectedTokenIdGlobal]);
+    if (globalSelectedTokenId && globalSelectedTokenId !== selectedTokenId) {
+      setSelectedTokenId(globalSelectedTokenId);
+    }
+  }, [globalSelectedTokenId, selectedTokenId]);
 
   const { isGM, isLocalMode } = usePlayerVisibility();
   const setMapVisible = useSetMapVisibleToPlayers();

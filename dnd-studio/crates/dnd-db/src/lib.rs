@@ -507,6 +507,7 @@ impl CampaignDb {
 
     pub async fn move_token(
         &self,
+        map_id: &str,
         token_id: &str,
         x: f64,
         y: f64,
@@ -515,12 +516,13 @@ impl CampaignDb {
             r#"
             UPDATE tokens
             SET x = ?, y = ?, version = version + 1
-            WHERE id = ?
+            WHERE id = ? AND map_id = ?
             "#,
         )
         .bind(x)
         .bind(y)
         .bind(token_id)
+        .bind(map_id)
         .execute(&self.pool)
         .await
         .map_err(AppError::db)?;
@@ -532,9 +534,14 @@ impl CampaignDb {
         self.fetch_token(token_id).await
     }
 
-    pub async fn delete_token(&self, token_id: &str) -> Result<(), AppError> {
-        let result = sqlx::query("DELETE FROM tokens WHERE id = ?")
+    pub async fn delete_token(
+        &self,
+        map_id: &str,
+        token_id: &str,
+    ) -> Result<(), AppError> {
+        let result = sqlx::query("DELETE FROM tokens WHERE id = ? AND map_id = ?")
             .bind(token_id)
+            .bind(map_id)
             .execute(&self.pool)
             .await
             .map_err(AppError::db)?;
@@ -548,6 +555,7 @@ impl CampaignDb {
 
     pub async fn assign_token_character(
         &self,
+        map_id: &str,
         token_id: &str,
         character_id: Option<String>,
     ) -> Result<TokenSummary, AppError> {
@@ -568,11 +576,12 @@ impl CampaignDb {
             r#"
             UPDATE tokens
             SET character_id = ?
-            WHERE id = ?
+            WHERE id = ? AND map_id = ?
             "#,
         )
         .bind(&character_id)
         .bind(token_id)
+        .bind(map_id)
         .execute(&self.pool)
         .await
         .map_err(AppError::db)?;

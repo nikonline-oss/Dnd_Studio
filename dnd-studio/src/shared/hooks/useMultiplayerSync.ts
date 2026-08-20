@@ -109,8 +109,29 @@ export function useMultiplayerSync() {
                     rotation?: number;
                 };
 
+                // Обновляем кэш карты
                 queryClient.setQueryData(
                     ['tokens', payload.map_id],
+                    (oldTokens: any[]) => {
+                        if (!oldTokens) return oldTokens;
+
+                        return oldTokens.map((token) => {
+                            if (token.id === payload.token_id) {
+                                return {
+                                    ...token,
+                                    x: payload.x,
+                                    y: payload.y,
+                                    rotation: payload.rotation ?? token.rotation,
+                                };
+                            }
+                            return token;
+                        });
+                    },
+                );
+
+                // Обновляем кэш дерева
+                queryClient.setQueryData(
+                    ['allTokens'],
                     (oldTokens: any[]) => {
                         if (!oldTokens) return oldTokens;
 
@@ -141,6 +162,10 @@ export function useMultiplayerSync() {
                 queryClient.invalidateQueries({
                     queryKey: ['tokens', payload.map_id],
                 });
+
+                queryClient.invalidateQueries({
+                    queryKey: ['allTokens'],
+                });
             }),
         );
 
@@ -152,8 +177,18 @@ export function useMultiplayerSync() {
                     map_id: string;
                 };
 
+                // Удаляем из кэша карты
                 queryClient.setQueryData(
                     ['tokens', payload.map_id],
+                    (oldTokens: any[]) => {
+                        if (!oldTokens) return oldTokens;
+                        return oldTokens.filter((token) => token.id !== payload.token_id);
+                    },
+                );
+
+                // Удаляем из кэша дерева
+                queryClient.setQueryData(
+                    ['allTokens'],
                     (oldTokens: any[]) => {
                         if (!oldTokens) return oldTokens;
                         return oldTokens.filter((token) => token.id !== payload.token_id);

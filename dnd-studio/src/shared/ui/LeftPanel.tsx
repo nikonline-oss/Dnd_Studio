@@ -3,18 +3,12 @@ import { open } from '@tauri-apps/plugin-dialog';
 import {
   DependencyCheckResult,
   useActiveCampaign,
-  useCharacters,
   useCompendiums,
-  useCreateCharacter,
   useCreateCompendium,
-  useCreateMap,
-  useDeleteCharacter,
   useDeleteCompendium,
-  useDeleteMap,
   useInstallBuiltinPlugin,
   useInstalledPlugins,
   useInstallPlugin,
-  useMaps,
   useSetPluginActive,
   useUninstallPlugin,
   useUpdateCompendium,
@@ -22,8 +16,7 @@ import {
 } from '../api/hooks';
 import { useUiStore } from '../stores/ui';
 import { useWorkspaceStore } from '../stores/workspace';
-import { usePlayerVisibility } from '../../shared/hooks/usePlayerVisibility';
-import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
+import { CampaignTree } from '../../features/navigator/CampaignTree';
 
 
 function parsePluginManifest(rawJson: string): {
@@ -530,291 +523,16 @@ function CompendiumsPanel() {
 }
 
 /* ========================================= */
-/* Панель Навигатора (Карты и Персонажи)     */
+/* Панель Навигатора (дерево кампании)       */
 /* ========================================= */
 
 function NavigatorPanel() {
-  const [newMapName, setNewMapName] = useState('');
-  const [newCharacterName, setNewCharacterName] = useState('');
-  const [newCharacterType, setNewCharacterType] = useState<
-    'pc' | 'npc' | 'monster'
-  >('pc');
-  const [pendingDeleteMap, setPendingDeleteMap] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
-  const [pendingDeleteCharacter, setPendingDeleteCharacter] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
-
-  const { canSeeMap, isGM } = usePlayerVisibility();
-
-  const { data: activeCampaign } = useActiveCampaign();
-
-  const { data: maps = [], isLoading: areMapsLoading } = useMaps(
-    Boolean(activeCampaign),
-  );
-
-  const visibleMaps = maps.filter(canSeeMap);
-
-  const { data: characters = [], isLoading: areCharactersLoading } =
-    useCharacters(Boolean(activeCampaign));
-
-  const createMap = useCreateMap();
-  const deleteMap = useDeleteMap();
-  const createCharacter = useCreateCharacter();
-  const deleteCharacter = useDeleteCharacter();
-
-  const openMapTab = useWorkspaceStore((state) => state.openMapTab);
-  const openCharacterTab = useWorkspaceStore(
-    (state) => state.openCharacterTab,
-  );
-
-  const handleDeleteMap = () => {
-    if (!pendingDeleteMap) return;
-
-    deleteMap.mutate(pendingDeleteMap.id, {
-      onSuccess: () => {
-        setPendingDeleteMap(null);
-      },
-    });
-  };
-
-  const handleDeleteCharacter = () => {
-    if (!pendingDeleteCharacter) return;
-
-    deleteCharacter.mutate(pendingDeleteCharacter.id, {
-      onSuccess: () => {
-        setPendingDeleteCharacter(null);
-      },
-    });
-  };
-
-  if (!activeCampaign) {
-    return (
-      <div className="empty-state">
-        Откройте кампанию, чтобы увидеть навигатор.
-      </div>
-    );
-  }
-
-  if (!isGM && visibleMaps.length === 0) {
-    return (
-      <div className="empty-state">
-        Ожидание карты от МГ…
-      </div>
-    );
-  }
-
-  const onCreateMap = (event: FormEvent) => {
-    event.preventDefault();
-
-    const name = newMapName.trim();
-
-    if (!name) {
-      return;
-    }
-
-    createMap.mutate(
-      {
-        name,
-        width: 2000,
-        height: 1500,
-        grid_size: 50,
-      },
-      {
-        onSuccess: () => {
-          setNewMapName('');
-        },
-      },
-    );
-  };
-
-  const onCreateCharacter = (event: FormEvent) => {
-    event.preventDefault();
-
-    const name = newCharacterName.trim();
-
-    if (!name) {
-      return;
-    }
-
-    createCharacter.mutate(
-      {
-        name,
-        characterType: newCharacterType,
-      },
-      {
-        onSuccess: () => {
-          setNewCharacterName('');
-        },
-      },
-    );
-  };
-
-  return (
-    <div className="navigator">
-      {/* Секция Персонажей */}
-      <div className="navigator-section">
-        <div className="navigator-section-title">Персонажи</div>
-
-        <form className="navigator-form" onSubmit={onCreateCharacter}>
-          <input
-            value={newCharacterName}
-            onChange={(event) => setNewCharacterName(event.target.value)}
-            placeholder="Имя персонажа"
-          />
-
-          <select
-            value={newCharacterType}
-            onChange={(event) =>
-              setNewCharacterType(
-                event.target.value as 'pc' | 'npc' | 'monster',
-              )
-            }
-          >
-            <option value="pc">Игровой</option>
-            <option value="npc">НПС</option>
-            <option value="monster">Монстр</option>
-          </select>
-
-          <button
-            type="submit"
-            disabled={!newCharacterName.trim() || createCharacter.isPending}
-          >
-            {createCharacter.isPending ? '…' : 'Добавить'}
-          </button>
-        </form>
-
-        {areCharactersLoading && (
-          <div className="empty-state">Загрузка персонажей…</div>
-        )}
-
-        {!areCharactersLoading && characters.length === 0 && (
-          <div className="empty-state">Персонажей пока нет.</div>
-        )}
-
-        <ul className="navigator-list">
-          {characters.map((character) => (
-            <li key={character.id} className="navigator-item-row">
-              <button
-                type="button"
-                className="navigator-item navigator-item-grow"
-                onClick={() => openCharacterTab(character)}
-              >
-                <span>{character.name}</span>
-                <small>{character.type.toUpperCase()}</small>
-              </button>
-
-              {isGM && (
-                <span className="navigator-item-delete-wrapper">
-                  <button
-                    type="button"
-                    className="icon-btn icon-btn-danger navigator-item-delete"
-                    title="Удалить персонажа"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPendingDeleteCharacter({
-                        id: character.id,
-                        name: character.name,
-                      });
-                    }}
-                  >
-                    🗑️
-                  </button>
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Секция Карт */}
-      <div className="navigator-section">
-        <div className="navigator-section-title">Карты</div>
-
-        <form className="navigator-form" onSubmit={onCreateMap}>
-          <input
-            value={newMapName}
-            onChange={(event) => setNewMapName(event.target.value)}
-            placeholder="Название новой карты"
-          />
-
-          <button
-            type="submit"
-            disabled={!newMapName.trim() || createMap.isPending}
-          >
-            {createMap.isPending ? '…' : 'Добавить'}
-          </button>
-        </form>
-
-        {areMapsLoading && (
-          <div className="empty-state">Загрузка карт…</div>
-        )}
-
-        {!areMapsLoading && maps.length === 0 && (
-          <div className="empty-state">Карт пока нет.</div>
-        )}
-
-        <ul className="navigator-list">
-          {visibleMaps.map((map) => (
-            <li key={map.id} className="navigator-item-row">
-              <button
-                type="button"
-                className="navigator-item navigator-item-grow"
-                onClick={() => openMapTab(map)}
-              >
-                <span>{map.name}</span>
-                <small>
-                  {map.width}×{map.height}
-                </small>
-              </button>
-
-              {isGM && (
-                <span className="navigator-item-delete-wrapper">
-                  <button
-                    type="button"
-                    className="icon-btn icon-btn-danger navigator-item-delete"
-                    title="Удалить карту"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPendingDeleteMap({ id: map.id, name: map.name });
-                    }}
-                  >
-                    🗑️
-                  </button>
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <ConfirmDialog
-        open={pendingDeleteMap !== null}
-        title="Удаление карты"
-        message={`Вы уверены, что хотите удалить карту "${pendingDeleteMap?.name}"? Все токены на этой карте будут удалены навсегда.`}
-        confirmLabel="Удалить"
-        cancelLabel="Отмена"
-        destructive
-        onConfirm={handleDeleteMap}
-        onCancel={() => setPendingDeleteMap(null)}
-      />
-
-      <ConfirmDialog
-        open={pendingDeleteCharacter !== null}
-        title="Удаление персонажа"
-        message={`Вы уверены, что хотите удалить персонажа "${pendingDeleteCharacter?.name}"?`}
-        confirmLabel="Удалить"
-        cancelLabel="Отмена"
-        destructive
-        onConfirm={handleDeleteCharacter}
-        onCancel={() => setPendingDeleteCharacter(null)}
-      />
-    </div>
-  );
+  return <CampaignTree />;
 }
+
+/* ========================================= */
+/* Левая панель (контейнер вкладок)          */
+/* ========================================= */
 
 /* ========================================= */
 /* Левая панель (контейнер вкладок)          */

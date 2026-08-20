@@ -42,7 +42,7 @@ use commands::plugins::{
 };
 use commands::profiles::{create_profile, delete_profile, list_profiles, touch_profile};
 use commands::tokens::{
-    assign_token_character, create_token, delete_token, list_tokens, move_token,
+    assign_token_character, create_token, delete_token, list_all_tokens, list_tokens, move_token,
 };
 use specta_typescript::Typescript;
 use state::{AppPaths, AppState};
@@ -66,6 +66,7 @@ fn main() {
             move_token,
             delete_token,
             assign_token_character,
+            list_all_tokens,
             create_character,
             list_characters,
             create_journal_entry,

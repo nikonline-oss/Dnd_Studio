@@ -167,10 +167,6 @@ type DeleteTokenVars = {
   tokenId: string;
 };
 
-type TokenMutationContext = {
-  previous?: TokenSummary[];
-};
-
 export function useCreateToken() {
   const queryClient = useQueryClient();
 
@@ -178,21 +174,18 @@ export function useCreateToken() {
     mutationFn: ({ mapId, x, y, characterId }: CreateTokenVars) =>
       unwrap(commands.createToken(mapId, x, y, characterId ?? null)),
 
-    onSuccess: (data, variables) => {
-      queryClient.setQueryData<TokenSummary[]>(
-        ['tokens', variables.mapId],
-        (old = []) => [...old, data],
-      );
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['tokens', variables.mapId],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ['allTokens'],
+      });
     },
 
     onError: (error) => {
       logError('api', 'create token failed', error);
-    },
-
-    onSettled: (_data, _error, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['tokens', variables.mapId],
-      });
     },
   });
 }
@@ -200,57 +193,49 @@ export function useCreateToken() {
 export function useMoveToken() {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    unknown,
-    Error,
-    MoveTokenVars,
-    TokenMutationContext
-  >({
-    mutationFn: ({ tokenId, x, y }: MoveTokenVars) =>
-      unwrap(commands.moveToken(tokenId, x, y)),
+  return useMutation({
+    mutationFn: ({
+      mapId,
+      tokenId,
+      x,
+      y,
+    }: MoveTokenVars) =>
+      unwrap(commands.moveToken(mapId, tokenId, x, y)),
 
-    onMutate: async (variables) => {
-      await queryClient.cancelQueries({
-        queryKey: ['tokens', variables.mapId],
-      });
-
-      const previous = queryClient.getQueryData<TokenSummary[]>([
-        'tokens',
-        variables.mapId,
-      ]);
-
-      queryClient.setQueryData<TokenSummary[]>(
+    onSuccess: (_data, variables) => {
+      // Обновляем кэш карты in-place
+      queryClient.setQueryData(
         ['tokens', variables.mapId],
-        (old = []) =>
-          old.map((token) =>
-            token.id === variables.tokenId
-              ? {
-                ...token,
-                x: variables.x,
-                y: variables.y,
-              }
-              : token,
-          ),
+        (oldTokens: TokenSummary[]) => {
+          if (!oldTokens) return oldTokens;
+
+          return oldTokens.map((token) => {
+            if (token.id === variables.tokenId) {
+              return { ...token, x: variables.x, y: variables.y };
+            }
+            return token;
+          });
+        },
       );
 
-      return { previous };
+      // Обновляем кэш дерева in-place
+      queryClient.setQueryData(
+        ['allTokens'],
+        (oldTokens: TokenSummary[]) => {
+          if (!oldTokens) return oldTokens;
+
+          return oldTokens.map((token) => {
+            if (token.id === variables.tokenId) {
+              return { ...token, x: variables.x, y: variables.y };
+            }
+            return token;
+          });
+        },
+      );
     },
 
-    onError: (error, variables, context) => {
+    onError: (error) => {
       logError('api', 'move token failed', error);
-
-      if (context?.previous) {
-        queryClient.setQueryData<TokenSummary[]>(
-          ['tokens', variables.mapId],
-          context.previous,
-        );
-      }
-    },
-
-    onSettled: (_data, _error, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['tokens', variables.mapId],
-      });
     },
   });
 }
@@ -258,50 +243,35 @@ export function useMoveToken() {
 export function useDeleteToken() {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    unknown,
-    Error,
-    DeleteTokenVars,
-    TokenMutationContext
-  >({
-    mutationFn: ({ tokenId }: DeleteTokenVars) =>
-      unwrap(commands.deleteToken(tokenId)),
+  return useMutation({
+    mutationFn: ({
+      mapId,
+      tokenId,
+    }: DeleteTokenVars) =>
+      unwrap(commands.deleteToken(mapId, tokenId)),
 
-    onMutate: async (variables) => {
-      await queryClient.cancelQueries({
-        queryKey: ['tokens', variables.mapId],
-      });
-
-      const previous = queryClient.getQueryData<TokenSummary[]>([
-        'tokens',
-        variables.mapId,
-      ]);
-
-      queryClient.setQueryData<TokenSummary[]>(
-        ['tokens', variables.mapId],
-        (old = []) =>
-          old.filter((token) => token.id !== variables.tokenId),
-      );
-
-      return { previous };
-    },
-
-    onError: (error, variables, context) => {
-      logError('api', 'delete token failed', error);
-
-      if (context?.previous) {
-        queryClient.setQueryData<TokenSummary[]>(
-          ['tokens', variables.mapId],
-          context.previous,
-        );
-      }
-    },
-
-    onSettled: (_data, _error, variables) => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: ['tokens', variables.mapId],
       });
+
+      queryClient.invalidateQueries({
+        queryKey: ['allTokens'],
+      });
     },
+
+    onError: (error) => {
+      logError('api', 'delete token failed', error);
+    },
+  });
+}
+
+export function useAllTokens(enabled: boolean = true) {
+  return useQuery({
+    queryKey: ['allTokens'],
+    queryFn: () => unwrap(commands.listAllTokens()),
+    enabled,
+    retry: false,
   });
 }
 
@@ -522,17 +492,22 @@ export function useAssignTokenCharacter() {
 
   return useMutation({
     mutationFn: ({
+      mapId,
       tokenId,
       characterId,
     }: {
       mapId: string;
       tokenId: string;
       characterId: string | null;
-    }) => unwrap(commands.assignTokenCharacter(tokenId, characterId)),
+    }) => unwrap(commands.assignTokenCharacter(mapId, tokenId, characterId)),
 
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: ['tokens', variables.mapId],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ['allTokens'],
       });
 
       queryClient.invalidateQueries({
