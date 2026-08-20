@@ -1,7 +1,7 @@
+use crate::commands::require_db;
 use crate::state::AppState;
-use crate::{commands::require_db};
-use base64::Engine;
 use dnd_core::{AppError, MapSummary};
+use dnd_db::CampaignDb;
 use tauri::State;
 
 #[tauri::command]
@@ -152,4 +152,188 @@ pub async fn update_map_fog(
     let db = require_db(&state.campaign).await?;
 
     db.update_map_fog(&map_id, fog_data).await
+}
+
+/// Устанавливает видимость карты для игроков
+#[tauri::command]
+#[specta::specta]
+pub async fn set_map_visible_to_players(
+    state: State<'_, AppState>,
+    map_id: String,
+    is_visible: bool,
+) -> Result<MapSummary, AppError> {
+    let db = require_db(&state.campaign).await?;
+
+    let visible = if is_visible { 1 } else { 0 };
+
+    let result = sqlx::query(
+        r#"
+        UPDATE maps
+        SET is_visible_to_players = ?, version = version + 1
+        WHERE id = ?
+        "#,
+    )
+    .bind(visible)
+    .bind(&map_id)
+    .execute(db.pool())
+    .await
+    .map_err(AppError::db)?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
+
+    db.get_map(&map_id).await?.ok_or(AppError::NotFound)
+}
+
+/// Устанавливает активную сцену (карту, которую видят игроки)
+#[tauri::command]
+#[specta::specta]
+pub async fn set_active_scene(state: State<'_, AppState>, map_id: String) -> Result<(), AppError> {
+    let db = require_db(&state.campaign).await?;
+
+    // Проверяем что карта существует
+    db.get_map(&map_id).await?.ok_or(AppError::NotFound)?;
+
+    // Сохраняем в campaign_meta
+    db.set_meta("active_scene_map_id", &map_id).await?;
+
+    Ok(())
+}
+
+/// Возвращает ID активной сцены
+#[tauri::command]
+#[specta::specta]
+pub async fn get_active_scene(state: State<'_, AppState>) -> Result<Option<String>, AppError> {
+    let db = require_db(&state.campaign).await?;
+
+    let meta = db.meta().await?;
+
+    Ok(meta.get("active_scene_map_id").cloned())
+}
+
+/// Обновляет видимость карты (используется при синхронизации в мультиплеере)
+#[tauri::command]
+#[specta::specta]
+pub async fn sync_map_visibility(
+    state: State<'_, AppState>,
+    map_id: String,
+    is_visible: bool,
+) -> Result<(), AppError> {
+    let db = require_db(&state.campaign).await?;
+
+    let visible = if is_visible { 1 } else { 0 };
+
+    let result = sqlx::query(
+        r#"
+        UPDATE maps
+        SET is_visible_to_players = ?
+        WHERE id = ?
+        "#,
+    )
+    .bind(visible)
+    .bind(&map_id)
+    .execute(db.pool())
+    .await
+    .map_err(AppError::db)?;
+
+    if result.rows_affected() == 0 {
+        // Карта не найдена - возможно ещё не синхронизирована
+        // Не ошибка, просто игнорируем
+        return Ok(());
+    }
+
+    Ok(())
+}
+
+/// Синхронизирует активную сцену (используется при синхронизации в мультиплеере)
+#[tauri::command]
+#[specta::specta]
+pub async fn sync_active_scene(
+    state: State<'_, AppState>,
+    map_id: Option<String>,
+) -> Result<(), AppError> {
+    let db = require_db(&state.campaign).await?;
+
+    if let Some(id) = map_id {
+        db.set_meta("active_scene_map_id", &id).await?;
+    } else {
+        db.set_meta("active_scene_map_id", "").await?;
+    }
+
+    Ok(())
+}
+
+/// Удаляет карту. Каскадно удалит все токены через FK.
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_map(
+    state: State<'_, AppState>,
+    map_id: String,
+) -> Result<(), AppError> {
+    let db = require_db(&state.campaign).await?;
+
+    // Получаем карту для доступа к asset_id
+    let map = db
+        .get_map(&map_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    // Удаляем карту (каскадно удалятся токены через ON DELETE CASCADE)
+    let result = sqlx::query("DELETE FROM maps WHERE id = ?")
+        .bind(&map_id)
+        .execute(db.pool())
+        .await
+        .map_err(AppError::db)?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
+
+    // Удаляем связанный ассет (если есть)
+    if let Some(asset_id) = map.asset_id {
+        let _ = delete_asset_internal(&db, &asset_id).await;
+    }
+
+    // Очищаем active_scene_map_id если это была активная сцена
+    let meta = db.meta().await?;
+    if meta.get("active_scene_map_id").map(|v| v == &map_id).unwrap_or(false) {
+        db.set_meta("active_scene_map_id", "").await?;
+    }
+
+    Ok(())
+}
+
+/// Внутренняя функция удаления ассета (для использования из других команд)
+async fn delete_asset_internal(
+    db: &dnd_db::CampaignDb,
+    asset_id: &str,
+) -> Result<(), AppError> {
+    // Получаем информацию об ассете
+    let asset = db.get_asset_async(asset_id).await?;
+
+    if let Some(asset) = asset {
+        // Удаляем файлы
+        let assets_dir = db.assets_dir();
+        let file_path = assets_dir
+            .join(&asset.r#type)
+            .join(format!("{}.webp", asset_id));
+        let thumb_path = assets_dir
+            .join(&asset.r#type)
+            .join("thumbs")
+            .join(format!("{}_thumb.webp", asset_id));
+
+        if file_path.exists() {
+            let _ = std::fs::remove_file(&file_path);
+        }
+
+        if thumb_path.exists() {
+            let _ = std::fs::remove_file(&thumb_path);
+        }
+
+        // Удаляем из БД
+        db.delete_asset(asset_id).await?;
+    }
+
+    Ok(())
 }

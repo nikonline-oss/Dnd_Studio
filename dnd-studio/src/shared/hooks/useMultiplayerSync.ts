@@ -5,6 +5,7 @@ import { relayClient } from '../services/relayClient';
 import type { Envelope } from '../services/relayClient';
 import { useUiStore } from '../stores/ui';
 import { useChatStore } from '../stores/chat';
+import { commands } from '../api/bindings';
 
 export function useMultiplayerSync() {
     const queryClient = useQueryClient();
@@ -202,6 +203,38 @@ export function useMultiplayerSync() {
         unsubscribers.push(
             relayClient.on('token_ownership', (envelope: Envelope) => {
                 console.log('[MultiplayerSync] token_ownership:', envelope.payload);
+            }),
+        );
+
+        // === СМЕНА АКТИВНОЙ СЦЕНЫ ===
+        unsubscribers.push(
+            relayClient.on('state_update', (envelope: Envelope) => {
+                const payload = envelope.payload as {
+                    active_scene_map_id?: string;
+                    map_visibility?: Record<string, boolean>;
+                };
+
+                console.log('[MultiplayerSync] state_update received:', payload);
+
+                // Обновляем видимость карт в локальной БД
+                if (payload.map_visibility) {
+                    for (const [mapId, isVisible] of Object.entries(payload.map_visibility)) {
+                        commands.syncMapVisibility(mapId, isVisible).catch((err) => {
+                            console.error('[MultiplayerSync] Failed to sync map visibility:', err);
+                        });
+                    }
+                }
+
+                // Обновляем активную сцену в локальной БД
+                if (payload.active_scene_map_id !== undefined) {
+                    commands.syncActiveScene(payload.active_scene_map_id).catch((err) => {
+                        console.error('[MultiplayerSync] Failed to sync active scene:', err);
+                    });
+                }
+
+                // Инвалидируем кэш после обновления БД
+                queryClient.invalidateQueries({ queryKey: ['maps'] });
+                queryClient.invalidateQueries({ queryKey: ['activeScene'] });
             }),
         );
 

@@ -1,19 +1,38 @@
 import { FormEvent, useState } from 'react';
-import { useCampaigns, useCreateCampaign, useOpenCampaign } from '../../shared/api/hooks';
+import { useCampaigns, useCreateCampaign, useDeleteCampaign, useOpenCampaign } from '../../shared/api/hooks';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useImportCampaign } from '../../shared/api/hooks';
 import { useUiStore } from '../../shared/stores/ui';
+import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
 
 export function StartScreen() {
   const [name, setName] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   const activeProfileId = useUiStore((state) => state.activeProfileId);
 
   const { data: campaigns = [], isLoading } = useCampaigns(activeProfileId!);
   const createCampaign = useCreateCampaign(activeProfileId!);
+  const deleteCampaign = useDeleteCampaign(activeProfileId!);
   const openCampaign = useOpenCampaign(activeProfileId!);
 
   const importCampaign = useImportCampaign();
+
+  const handleDeleteCampaign = async () => {
+    if (!pendingDelete) return;
+
+    deleteCampaign.mutate(
+      { campaignId: pendingDelete.id, profileId: activeProfileId! },
+      {
+        onSuccess: () => {
+          setPendingDelete(null);
+        },
+      },
+    );
+  };
 
   const handleImport = async () => {
     try {
@@ -21,7 +40,7 @@ export function StartScreen() {
         multiple: false,
         filters: [
           {
-            name: 'DndStudio Campaign',
+            name: 'Kампания DndStudio',
             extensions: ['dndcampaign'],
           },
         ],
@@ -53,16 +72,16 @@ export function StartScreen() {
     <div className="start-screen">
       <div className="start-card">
         <h1>DndStudio</h1>
-        <p>Create or open a campaign to start.</p>
+        <p>Создайте или откройте кампанию для начала работы.</p>
 
         <form className="start-form" onSubmit={onSubmit}>
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="Campaign name"
+            placeholder="Название кампании"
           />
           <button type="submit" disabled={createCampaign.isPending || !name.trim()}>
-            {createCampaign.isPending ? 'Creating…' : 'Create campaign'}
+            {createCampaign.isPending ? 'Создание…' : 'Создать кампанию'}
           </button>
         </form>
 
@@ -72,39 +91,67 @@ export function StartScreen() {
             onClick={handleImport}
             disabled={importCampaign.isPending}
           >
-            {importCampaign.isPending ? 'Importing…' : 'Import campaign (.dndcampaign)'}
+            {importCampaign.isPending ? 'Импорт…' : 'Импортировать кампанию (.dndcampaign)'}
           </button>
         </div>
 
         {createCampaign.isError && (
           <div className="error-text">
-            Failed to create campaign.
+            Не удалось создать кампанию.
           </div>
         )}
 
         <section className="recent-campaigns">
-          <h2>Recent campaigns</h2>
+          <h2>Последние кампании</h2>
 
-          {isLoading && <p>Loading…</p>}
+          {isLoading && <p>Загрузка…</p>}
 
           {!isLoading && campaigns.length === 0 && (
-            <p>No campaigns yet.</p>
+            <p>Кампаний пока нет.</p>
           )}
 
           <ul>
             {campaigns.map((campaign) => (
               <li key={campaign.id}>
-                <button
-                  type="button"
-                  onClick={() => openCampaign.mutate(campaign.id)}
-                  disabled={openCampaign.isPending}
-                >
-                  {campaign.name}
-                </button>
+                <div className="navigator-item-row">
+                  <span className="navigator-item-grow">
+                    <button
+                      type="button"
+                      onClick={() => openCampaign.mutate(campaign.id)}
+                      disabled={openCampaign.isPending}
+                    >
+                      {campaign.name}
+                    </button>
+                  </span>
+                  <div className="navigator-item-actions">
+                    <button
+                      type="button"
+                      className="icon-btn icon-btn-danger"
+                      title="Удалить кампанию"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPendingDelete({ id: campaign.id, name: campaign.name });
+                      }}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
               </li>
             ))}
           </ul>
         </section>
+
+        <ConfirmDialog
+          open={pendingDelete !== null}
+          title="Удаление кампании"
+          message={`Вы уверены, что хотите удалить "${pendingDelete?.name}"? Это действие необратимо. Все карты, персонажи и ресурсы будут удалены навсегда.`}
+          confirmLabel="Удалить"
+          cancelLabel="Отмена"
+          destructive
+          onConfirm={handleDeleteCampaign}
+          onCancel={() => setPendingDelete(null)}
+        />
       </div>
     </div>
   );

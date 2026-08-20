@@ -42,7 +42,12 @@ export function JournalTab({ entryId }: { entryId?: string }) {
   const deleteEntry = useDeleteJournalEntry();
   const createLink = useCreateJournalLink();
   const deleteLink = useDeleteJournalLink();
-  const { canSeeJournalEntry, canEditJournalEntry } = usePlayerVisibility();
+
+  const {
+    isGM,
+    canSeeJournalEntry,
+    canEditJournalEntry,
+  } = usePlayerVisibility();
 
   const visibleEntries = allEntries.filter(canSeeJournalEntry);
 
@@ -66,6 +71,9 @@ export function JournalTab({ entryId }: { entryId?: string }) {
   const [linkLabel, setLinkLabel] = useState('');
   const [linkDirected, setLinkDirected] = useState(true);
 
+  // Определяем, может ли текущий пользователь редактировать эту запись
+  const canEdit = entry ? (isGM || canEditJournalEntry(entry)) : false;
+
   useEffect(() => {
     if (!entry || entry.id === initializedFor) {
       return;
@@ -74,7 +82,7 @@ export function JournalTab({ entryId }: { entryId?: string }) {
     setTitle(entry.title);
     setFolderPath(entry.folderPath);
     setContentMarkdown(entry.contentMarkdown);
-    setIsVisibleToPlayers(entry.visibility === 'players');
+    setIsVisibleToPlayers(entry.visibility === 'players' || entry.visibility === 'public');
     setInitializedFor(entry.id);
   }, [entry, initializedFor]);
 
@@ -94,7 +102,18 @@ export function JournalTab({ entryId }: { entryId?: string }) {
     return <div className="workspace-empty">Journal entry not found.</div>;
   }
 
+  // Проверка видимости (если игрок открыл скрытую запись — показываем ошибку)
+  if (!isGM && !canSeeJournalEntry(entry)) {
+    return (
+      <div className="workspace-empty">
+        You don't have permission to view this entry.
+      </div>
+    );
+  }
+
   const handleSave = () => {
+    if (!canEdit) return;
+
     updateEntry.mutate(
       {
         id: entry.id,
@@ -113,6 +132,8 @@ export function JournalTab({ entryId }: { entryId?: string }) {
   };
 
   const handleDelete = () => {
+    if (!canEdit) return;
+
     if (!window.confirm('Delete this journal entry?')) {
       return;
     }
@@ -131,6 +152,7 @@ export function JournalTab({ entryId }: { entryId?: string }) {
 
   const handleCreateLink = () => {
     if (!entryId || !linkTargetId) return;
+    if (!isGM) return; // Связи может создавать только GM (MVP)
 
     createLink.mutate(
       {
@@ -152,6 +174,8 @@ export function JournalTab({ entryId }: { entryId?: string }) {
   };
 
   const handleDeleteLink = (linkId: string) => {
+    if (!isGM) return;
+
     if (!window.confirm('Delete this link?')) return;
 
     deleteLink.mutate({
@@ -176,30 +200,39 @@ export function JournalTab({ entryId }: { entryId?: string }) {
   return (
     <div className="journal-tab">
       <div className="journal-toolbar">
+        {/* Заголовок: редактируемый только для тех, кто может редактировать */}
         <input
           type="text"
           value={title}
           onChange={(event) => setTitle(event.target.value)}
+          disabled={!canEdit}
           placeholder="Entry title"
+          readOnly={!canEdit}
         />
 
-        <input
-          type="text"
-          value={folderPath}
-          onChange={(event) => setFolderPath(event.target.value)}
-          placeholder="/folder"
-        />
-
-        <label className="journal-visible-label">
+        {/* Путь к папке: только для GM */}
+        {isGM && (
           <input
-            type="checkbox"
-            checked={isVisibleToPlayers}
-            onChange={(event) =>
-              setIsVisibleToPlayers(event.target.checked)
-            }
+            type="text"
+            value={folderPath}
+            onChange={(event) => setFolderPath(event.target.value)}
+            placeholder="/folder"
           />
-          Visible to players
-        </label>
+        )}
+
+        {/* Checkbox видимости: только для GM */}
+        {isGM && (
+          <label className="journal-visible-label">
+            <input
+              type="checkbox"
+              checked={isVisibleToPlayers}
+              onChange={(event) =>
+                setIsVisibleToPlayers(event.target.checked)
+              }
+            />
+            Visible to players
+          </label>
+        )}
 
         <button
           type="button"
@@ -208,21 +241,27 @@ export function JournalTab({ entryId }: { entryId?: string }) {
           {showPreview ? 'Hide preview' : 'Show preview'}
         </button>
 
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={updateEntry.isPending}
-        >
-          {updateEntry.isPending ? 'Saving…' : 'Save'}
-        </button>
+        {/* Кнопка сохранения: только для тех, кто может редактировать */}
+        {canEdit && (
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={updateEntry.isPending}
+          >
+            {updateEntry.isPending ? 'Saving…' : 'Save'}
+          </button>
+        )}
 
-        <button
-          type="button"
-          onClick={handleDelete}
-          disabled={deleteEntry.isPending}
-        >
-          {deleteEntry.isPending ? 'Deleting…' : 'Delete'}
-        </button>
+        {/* Кнопка удаления: только для GM */}
+        {isGM && (
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleteEntry.isPending}
+          >
+            {deleteEntry.isPending ? 'Deleting…' : 'Delete'}
+          </button>
+        )}
       </div>
 
       <div
@@ -232,6 +271,7 @@ export function JournalTab({ entryId }: { entryId?: string }) {
             : 'journal-editor'
         }
       >
+        {/* Textarea: read-only если не может редактировать */}
         <textarea
           className="journal-textarea"
           value={contentMarkdown}
@@ -239,6 +279,7 @@ export function JournalTab({ entryId }: { entryId?: string }) {
           placeholder="# Heading
 
 Write markdown here…"
+          readOnly={!canEdit}
         />
 
         {showPreview && <MarkdownPreview content={contentMarkdown} />}
@@ -248,15 +289,18 @@ Write markdown here…"
       <div className="journal-links-section">
         <div className="journal-links-header">
           <h4>Links ({links.length})</h4>
-          <button
-            type="button"
-            onClick={() => setShowLinkForm(!showLinkForm)}
-          >
-            {showLinkForm ? 'Cancel' : '+ Link'}
-          </button>
+          {/* Кнопка добавления связи — только для GM */}
+          {isGM && (
+            <button
+              type="button"
+              onClick={() => setShowLinkForm(!showLinkForm)}
+            >
+              {showLinkForm ? 'Cancel' : '+ Link'}
+            </button>
+          )}
         </div>
 
-        {showLinkForm && (
+        {showLinkForm && isGM && (
           <div className="journal-link-form">
             <select
               value={linkTargetId}
@@ -312,47 +356,52 @@ Write markdown here…"
             <div className="empty-state">No links yet.</div>
           )}
 
-          {links.map((link) => {
-            const isOutgoing = link.sourceEntryId === entry.id;
-            const otherEntryId = isOutgoing
-              ? link.targetId
-              : link.sourceEntryId;
+          {links
+            .filter((link) => isGM || link.isVisibleToPlayers)
+            .map((link) => {
+              const isOutgoing = link.sourceEntryId === entry.id;
+              const otherEntryId = isOutgoing
+                ? link.targetId
+                : link.sourceEntryId;
 
-            return (
-              <div key={link.id} className="journal-link-item">
-                <span className="journal-link-direction">
-                  {isOutgoing ? '→' : '←'}
-                </span>
-
-                <span className="journal-link-type">
-                  {getLinkTypeLabel(link.linkType)}
-                </span>
-
-                <span className="journal-link-target">
-                  {getEntryName(otherEntryId)}
-                </span>
-
-                {link.label && (
-                  <span className="journal-link-label">
-                    ({link.label})
+              return (
+                <div key={link.id} className="journal-link-item">
+                  <span className="journal-link-direction">
+                    {isOutgoing ? '→' : '←'}
                   </span>
-                )}
 
-                {!link.isDirected && (
-                  <span className="journal-link-undirected">↔</span>
-                )}
+                  <span className="journal-link-type">
+                    {getLinkTypeLabel(link.linkType)}
+                  </span>
 
-                <button
-                  type="button"
-                  className="icon-btn icon-btn-danger"
-                  onClick={() => handleDeleteLink(link.id)}
-                  title="Delete link"
-                >
-                  ×
-                </button>
-              </div>
-            );
-          })}
+                  <span className="journal-link-target">
+                    {getEntryName(otherEntryId)}
+                  </span>
+
+                  {link.label && (
+                    <span className="journal-link-label">
+                      ({link.label})
+                    </span>
+                  )}
+
+                  {!link.isDirected && (
+                    <span className="journal-link-undirected">↔</span>
+                  )}
+
+                  {/* Кнопка удаления — только для GM */}
+                  {isGM && (
+                    <button
+                      type="button"
+                      className="icon-btn icon-btn-danger"
+                      onClick={() => handleDeleteLink(link.id)}
+                      title="Delete link"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              );
+            })}
         </div>
       </div>
     </div>

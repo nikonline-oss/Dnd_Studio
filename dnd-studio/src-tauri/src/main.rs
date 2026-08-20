@@ -17,7 +17,9 @@ use commands::campaign_io::{
     open_multiplayer_campaign, read_file_bytes, save_multiplayer_campaign,
     save_multiplayer_campaign_zip, update_multiplayer_session,
 };
-use commands::characters::{create_character, get_character, list_characters, update_character};
+use commands::characters::{
+    create_character, delete_character, get_character, list_characters, update_character,
+};
 use commands::compendiums::{
     create_compendium, create_compendium_entry, delete_compendium, delete_compendium_entry,
     list_compendium_entries, list_compendiums, update_compendium, update_compendium_entry,
@@ -26,7 +28,10 @@ use commands::journal::{
     create_journal_entry, create_journal_link, delete_journal_entry, delete_journal_link,
     get_journal_entry, list_journal_entries, list_journal_links, update_journal_entry,
 };
-use commands::maps::{create_map, get_map, import_map_image, list_maps, update_map_fog};
+use commands::maps::{
+    create_map, delete_map, get_active_scene, get_map, import_map_image, list_maps, set_active_scene,
+    set_map_visible_to_players, sync_active_scene, sync_map_visibility, update_map_fog,
+};
 use commands::plugin_deps::{
     can_deactivate_plugin, can_uninstall_plugin, validate_plugin_dependencies,
 };
@@ -70,6 +75,7 @@ fn main() {
             delete_journal_entry,
             get_character,
             update_character,
+            delete_character,
             import_map_image,
             read_campaign_asset_data_url,
             update_map_fog,
@@ -123,6 +129,12 @@ fn main() {
             delete_campaign,
             export_campaign_zip_to_temp,
             save_multiplayer_campaign_zip,
+            set_map_visible_to_players,
+            set_active_scene,
+            delete_map,
+            get_active_scene,
+            sync_map_visibility,
+            sync_active_scene,
         ]);
 
     #[cfg(debug_assertions)]

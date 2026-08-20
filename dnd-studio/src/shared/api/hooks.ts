@@ -61,6 +61,24 @@ export function useCreateCampaign(profileId: string) {
   });
 }
 
+export function useDeleteCampaign(profileId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ campaignId, profileId: pid }: { campaignId: string; profileId: string }) =>
+      unwrap(commands.deleteCampaign(campaignId, pid)),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['campaigns', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['activeCampaign'] });
+    },
+
+    onError: (error) => {
+      logError('api', 'delete campaign failed', error);
+    },
+  });
+}
+
 export function useOpenCampaign(profileId: string) {
   const queryClient = useQueryClient();
 
@@ -1162,6 +1180,91 @@ export function useOpenMultiplayerCampaign() {
 
     onError: (error) => {
       logError('api', 'open multiplayer campaign failed', error);
+    },
+  });
+}
+
+export function useSetMapVisibleToPlayers() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      mapId,
+      isVisible,
+    }: {
+      mapId: string;
+      isVisible: boolean;
+    }) => unwrap(commands.setMapVisibleToPlayers(mapId, isVisible)),
+
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['maps'] });
+      queryClient.invalidateQueries({
+        queryKey: ['map', variables.mapId],
+      });
+    },
+
+    onError: (error) => {
+      logError('api', 'set map visibility failed', error);
+    },
+  });
+}
+
+export function useSetActiveScene() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (mapId: string) => unwrap(commands.setActiveScene(mapId)),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['activeScene'] });
+      queryClient.invalidateQueries({ queryKey: ['maps'] });
+    },
+
+    onError: (error) => {
+      logError('api', 'set active scene failed', error);
+    },
+  });
+}
+
+export function useActiveScene(enabled: boolean = true) {
+  return useQuery({
+    queryKey: ['activeScene'],
+    queryFn: () => unwrap(commands.getActiveScene()),
+    enabled,
+    retry: false,
+  });
+}
+
+export function useDeleteMap() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (mapId: string) => unwrap(commands.deleteMap(mapId)),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['maps'] });
+      queryClient.invalidateQueries({ queryKey: ['activeScene'] });
+    },
+
+    onError: (error) => {
+      logError('api', 'delete map failed', error);
+    },
+  });
+}
+
+export function useDeleteCharacter() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (characterId: string) =>
+      unwrap(commands.deleteCharacter(characterId)),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['characters'] });
+    },
+
+    onError: (error) => {
+      logError('api', 'delete character failed', error);
     },
   });
 }

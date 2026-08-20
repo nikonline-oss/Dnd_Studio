@@ -25,6 +25,7 @@ interface MapCanvasProps {
 
     fogCells?: Set<string>; // Формат "x,y"
     fogMode?: FogMode;
+    hpFormatter?: (current: number, max: number, isMonster: boolean) => string;
     onFogChange?: (cells: Set<string>) => void;
 }
 

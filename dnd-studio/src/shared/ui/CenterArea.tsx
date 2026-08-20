@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import { useActiveCampaign } from '../api/hooks';
+import { useActiveCampaign, useActiveScene } from '../api/hooks';
 import { StartScreen } from '../../features/campaign-start/StartScreen';
 import { JournalTab } from '../../features/journal/JournalTab';
 import { CharacterTab } from '../../features/character/CharacterTab';
@@ -75,8 +75,14 @@ export function CenterArea() {
   const setLastCampaignId = useWorkspaceStore(
     (state) => state.setLastCampaignId,
   );
+  const { data: maps = [] } = useMaps(Boolean(activeCampaign));
+  const { data: activeSceneId } = useActiveScene(Boolean(activeCampaign));
+  const { isGM, isLocalMode, canSeeMap } = usePlayerVisibility();
+
+  const openTab = useWorkspaceStore((state) => state.openTab);
 
   const previousActiveCampaignIdRef = useRef<string | null>(null);
+
 
   useEffect(() => {
     const currentActiveCampaignId = activeCampaign?.id ?? null;
@@ -138,6 +144,24 @@ export function CenterArea() {
     bindCampaign,
     setLastCampaignId,
   ]);
+
+  useEffect(() => {
+    if (isGM || isLocalMode) return;
+    if (!activeSceneId) return;
+
+    const sceneMap = maps.find((m) => m.id === activeSceneId);
+
+    if (sceneMap && sceneMap.isVisibleToPlayers) {
+      // Открываем вкладку карты если ещё не открыта
+      const tabId = `map:${sceneMap.id}`;
+      openTab({
+        id: tabId,
+        kind: 'map',
+        title: sceneMap.name,
+        entityId: sceneMap.id,
+      });
+    }
+  }, [activeSceneId, maps, isGM, isLocalMode, openTab]);
 
   if (isLoading) {
     return (

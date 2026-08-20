@@ -2,12 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 
 import {
+  useActiveScene,
   useCharacters,
   useCreateToken,
   useDeleteToken,
   useImportMapImage,
   useMap,
   useMoveToken,
+  useSetActiveScene,
+  useSetMapVisibleToPlayers,
   useTokens,
 } from '../../shared/api/hooks';
 import { useMapSettingsStore } from '../../shared/stores/mapSettings';
@@ -19,6 +22,7 @@ import { MapImageImportDialog } from './MapImageImportDialog';
 import type { MapImageImportOptions } from '../../shared/api/hooks';
 import { useUiStore } from '../../shared/stores/ui';
 import { usePlayerVisibility } from '../../shared/hooks/usePlayerVisibility';
+
 
 export function MapTab({ mapId }: { mapId?: string }) {
   const { data: map, isLoading } = useMap(mapId);
@@ -64,11 +68,53 @@ export function MapTab({ mapId }: { mapId?: string }) {
     setSelectedTokenIdGlobal(selectedTokenId);
   }, [selectedTokenId, setSelectedTokenIdGlobal]);
 
-  const connectionStatus = useUiStore((state) => state.connectionStatus);
-  const userRole = useUiStore((state) => state.userRole);
+  const { isGM, isLocalMode } = usePlayerVisibility();
+  const setMapVisible = useSetMapVisibleToPlayers();
+  const setActiveScene = useSetActiveScene();
+  const { data: activeSceneId } = useActiveScene(Boolean(map));
 
-  const isLocalMode = connectionStatus !== 'connected';
-  const isGM = isLocalMode || userRole === 'gm' || userRole === 'co_gm';
+  const isActiveScene = !map || !isGM ? false : activeSceneId === map.id;
+
+
+  // GM: переключить видимость карты
+  const handleToggleVisibility = () => {
+    if (!map || !isGM) return;
+    if (!isGM) return;
+
+    const newVisibility = !map.isVisibleToPlayers;
+
+    setMapVisible.mutate(
+      { mapId: map.id, isVisible: newVisibility },
+      {
+        onSuccess: () => {
+          // Уведомляем игроков через Relay
+          if (relayClient.status === 'connected') {
+            relayClient.send('state_update', {
+              map_visibility: { [map.id]: newVisibility },
+            });
+          }
+        },
+      },
+    );
+  };
+
+  // GM: сделать активной сценой
+  const handleSetActiveScene = () => {
+    if (!map || !isGM) return;
+    if (!isGM) return;
+
+    setActiveScene.mutate(map.id, {
+      onSuccess: () => {
+        // Уведомляем игроков через Relay
+        if (relayClient.status === 'connected') {
+          relayClient.send('state_update', {
+            active_scene_map_id: map.id,
+          });
+        }
+      },
+    });
+  };
+
   // Перемещение токена с отправкой в Relay
   const handleMoveToken = useCallback(
     async (tokenId: string, x: number, y: number) => {
@@ -258,6 +304,38 @@ export function MapTab({ mapId }: { mapId?: string }) {
     <div className="map-tab">
       <div className="map-tab-header">
         <span>{map.name}</span>
+
+        {/* GM-only: управление видимостью */}
+        {isGM && (
+          <div className="map-scene-controls">
+            <label className="map-visibility-toggle" title="Visible to players">
+              <input
+                type="checkbox"
+                checked={map.isVisibleToPlayers}
+                onChange={handleToggleVisibility}
+                disabled={setMapVisible.isPending}
+              />
+              👁️
+            </label>
+
+            <button
+              type="button"
+              className={isActiveScene ? 'scene-active-btn active' : 'scene-active-btn'}
+              onClick={handleSetActiveScene}
+              disabled={setActiveScene.isPending}
+              title="Set as active scene for players"
+            >
+              {isActiveScene ? '🎬 Active Scene' : 'Set Active'}
+            </button>
+          </div>
+        )}
+
+        {/* Индикатор для Player: карта видна или нет */}
+        {!isGM && !isLocalMode && (
+          <span className="map-player-indicator">
+            {map.isVisibleToPlayers ? '👁️ Visible' : '🔒 Hidden'}
+          </span>
+        )}
 
         <div className="map-tab-actions">
           {/* Load image и Grid — только GM или локальный режим */}

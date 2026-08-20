@@ -17,6 +17,10 @@ pub struct CampaignDb {
 }
 
 impl CampaignDb {
+    pub fn pool(&self) -> &SqlitePool {
+        &self.pool
+    }
+    
     pub async fn create(path: &Path) -> Result<Self, AppError> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(AppError::io)?;

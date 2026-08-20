@@ -73,6 +73,8 @@ export const commands = {
 	version: number,
 } | null, AppError>(__TAURI_INVOKE("get_character", { id })),
 	updateCharacter: (id: string, name: string, characterType: string, dataJson: string) => typedError<CharacterDetail, AppError>(__TAURI_INVOKE("update_character", { id, name, characterType, dataJson })),
+	/**  Удаляет персонажа. Токены, связанные с ним, останутся (character_id = NULL через FK). */
+	deleteCharacter: (characterId: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_character", { characterId })),
 	importMapImage: (mapId: string, sourcePath: string, options: MapImageImportOptions) => typedError<MapSummary, AppError>(__TAURI_INVOKE("import_map_image", { mapId, sourcePath, options })),
 	/**  Читает файл кампании из директории профиля и возвращает как data URL */
 	readCampaignAssetDataUrl: (relativePath: string) => typedError<string, AppError>(__TAURI_INVOKE("read_campaign_asset_data_url", { relativePath })),
@@ -179,6 +181,18 @@ export const commands = {
 	exportCampaignZipToTemp: () => typedError<string, AppError>(__TAURI_INVOKE("export_campaign_zip_to_temp")),
 	/**  Сохраняет мультиплеерную кампанию из ZIP (db + assets) в директорию профиля. */
 	saveMultiplayerCampaignZip: (roomId: string, serverUrl: string, role: string, displayName: string, zipData: number[], profileId: string) => typedError<string, AppError>(__TAURI_INVOKE("save_multiplayer_campaign_zip", { roomId, serverUrl, role, displayName, zipData, profileId })),
+	/**  Устанавливает видимость карты для игроков */
+	setMapVisibleToPlayers: (mapId: string, isVisible: boolean) => typedError<MapSummary, AppError>(__TAURI_INVOKE("set_map_visible_to_players", { mapId, isVisible })),
+	/**  Устанавливает активную сцену (карту, которую видят игроки) */
+	setActiveScene: (mapId: string) => typedError<null, AppError>(__TAURI_INVOKE("set_active_scene", { mapId })),
+	/**  Удаляет карту. Каскадно удалит все токены через FK. */
+	deleteMap: (mapId: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_map", { mapId })),
+	/**  Возвращает ID активной сцены */
+	getActiveScene: () => typedError<string | null, AppError>(__TAURI_INVOKE("get_active_scene")),
+	/**  Обновляет видимость карты (используется при синхронизации в мультиплеере) */
+	syncMapVisibility: (mapId: string, isVisible: boolean) => typedError<null, AppError>(__TAURI_INVOKE("sync_map_visibility", { mapId, isVisible })),
+	/**  Синхронизирует активную сцену (используется при синхронизации в мультиплеере) */
+	syncActiveScene: (mapId: string | null) => typedError<null, AppError>(__TAURI_INVOKE("sync_active_scene", { mapId })),
 };
 
 /* Types */

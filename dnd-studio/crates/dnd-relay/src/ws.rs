@@ -351,11 +351,12 @@ async fn handle_incoming_message(state: &Arc<AppState>, room_id: &str, user_id: 
             // Только GM может назначать владельцев токенов
             handle_token_ownership(state, room_id, user_id, &envelope).await;
         }
+        MessageType::StateUpdate | MessageType::StateSync => {
+            handle_gm_only_action(state, room_id, user_id, &envelope).await;
+        }
 
         MessageType::ChatMessage
         | MessageType::DiceRoll
-        | MessageType::StateSync
-        | MessageType::StateUpdate
         | MessageType::RequestAction
         | MessageType::ActionApproved
         | MessageType::ActionDenied => {
@@ -371,6 +372,7 @@ async fn handle_incoming_message(state: &Arc<AppState>, room_id: &str, user_id: 
     }
 }
 
+/// Проверка прав на выполнение действия
 /// Проверка прав на выполнение действия
 async fn check_permission(
     state: &Arc<AppState>,
@@ -394,7 +396,9 @@ async fn check_permission(
         | MessageType::InitiativeUpdate
         | MessageType::RoleAssigned
         | MessageType::TokenOwnership
-        | MessageType::Kick => room.is_gm(user_id),
+        | MessageType::Kick
+        | MessageType::StateUpdate
+        | MessageType::StateSync => room.is_gm(user_id),
 
         // Перемещение токена — проверка владельца
         MessageType::TokenMove => {
@@ -415,15 +419,22 @@ async fn check_permission(
         MessageType::ChatMessage
         | MessageType::DiceRoll
         | MessageType::Heartbeat
-        | MessageType::RequestAction => true,
+        | MessageType::RequestAction
+        | MessageType::Join
+        | MessageType::Leave => true,
 
         // Ответы на запросы — только GM
         MessageType::ActionApproved | MessageType::ActionDenied => room.is_gm(user_id),
 
-        _ => false,
+        _ => {
+            warn!(
+                "Unknown message type {:?} from user {} — denied by default",
+                envelope.msg_type, user_id
+            );
+            false
+        }
     }
 }
-
 /// Обработка перемещения токена
 async fn handle_token_move(
     state: &Arc<AppState>,

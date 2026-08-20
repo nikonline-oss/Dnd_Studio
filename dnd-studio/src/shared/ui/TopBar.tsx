@@ -4,7 +4,7 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { useExportCampaign } from '../api/hooks';
 import { usePluginThemes } from '../api/hooks';
 
-const menuItems = ['File', 'Edit', 'View', 'Tools', 'Help'];
+const menuItems = ['Файл', 'Правка', 'Вид', 'Инструменты', 'Справка'];
 
 export function TopBar() {
   const themeMode = useUiStore((state) => state.themeMode);
@@ -29,7 +29,7 @@ export function TopBar() {
   const setActiveProfile = useUiStore((state) => state.setActiveProfile);
 
   const handleSwitchProfile = () => {
-    if (window.confirm('Switch profile? Unsaved changes will be lost.')) {
+    if (window.confirm('Сменить профиль? Несохранённые изменения будут потеряны.')) {
       setActiveProfile(null, null);
     }
   };
@@ -58,7 +58,7 @@ export function TopBar() {
         defaultPath: `${activeCampaign.name.replace(/\s+/g, '-').toLowerCase()}.dndcampaign`,
         filters: [
           {
-            name: 'DndStudio Campaign',
+            name: 'Kампания DndStudio',
             extensions: ['dndcampaign'],
           },
         ],
@@ -96,36 +96,36 @@ export function TopBar() {
               onClick={() => closeCampaign.mutate()}
               disabled={closeCampaign.isPending}
             >
-              {closeCampaign.isPending ? 'Closing…' : 'Switch campaign'}
+              {closeCampaign.isPending ? 'Закрытие…' : 'Сменить кампанию'}
             </button>
             <button
               type="button"
               onClick={handleExport}
               disabled={exportCampaign.isPending}
             >
-              {exportCampaign.isPending ? 'Exporting…' : 'Export'}
+              {exportCampaign.isPending ? 'Экспорт…' : 'Экспорт'}
             </button>
           </div>
         ) : (
-          <span className="breadcrumb">No campaign</span>
+          <span className="breadcrumb">Нет кампании</span>
         )}
       </div>
 
       <div className="topbar-right">
         <button type="button" onClick={toggleLeft}>
-          Left
+          Лево
         </button>
 
         <button type="button" onClick={toggleBottom}>
-          Bottom
+          Низ
         </button>
 
         <button type="button" onClick={toggleRight}>
-          Right
+          Право
         </button>
         <div className="topbar-profile">
           <span className="topbar-profile-name">{activeProfileName}</span>
-          <button type="button" onClick={handleSwitchProfile} title="Switch profile">
+          <button type="button" onClick={handleSwitchProfile} title="Сменить профиль">
             👤
           </button>
         </div>
@@ -134,12 +134,12 @@ export function TopBar() {
           value={currentThemeValue}
           onChange={(event) => handleThemeChange(event.target.value)}
         >
-          <option value="system">System</option>
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
+          <option value="system">Системная</option>
+          <option value="light">Светлая</option>
+          <option value="dark">Тёмная</option>
 
           {pluginThemes.length > 0 && (
-            <optgroup label="Plugin themes">
+            <optgroup label="Темы плагинов">
               {pluginThemes.map((theme) => {
                 const value = `${theme.pluginId}::${theme.themeKey}`;
                 return (

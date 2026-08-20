@@ -2935,3 +2935,226 @@ select:focus-visible {
   font-size: 13px;
   line-height: 1.6;
 }
+
+/* Scene management controls */
+
+.map-scene-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border-gold);
+}
+
+.map-visibility-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.map-visibility-toggle input {
+  cursor: pointer;
+}
+
+.scene-active-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border-gold);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.scene-active-btn:hover {
+  border-color: var(--border-gold-strong);
+  color: var(--text);
+}
+
+.scene-active-btn.active {
+  background: var(--gold-soft);
+  border-color: var(--border-gold-strong);
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.map-player-indicator {
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: 8px;
+}
+
+/* Confirm Dialog */
+
+.confirm-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(3px);
+}
+
+.confirm-dialog {
+  min-width: 360px;
+  max-width: 480px;
+  border: 1px solid var(--border-gold-strong);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, var(--surface-sheen), transparent 30%),
+    var(--panel);
+  box-shadow: 0 24px 60px var(--shadow);
+  overflow: hidden;
+}
+
+.confirm-dialog-header {
+  padding: 16px 20px 8px;
+}
+
+.confirm-dialog-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.confirm-dialog-body {
+  padding: 8px 20px 16px;
+}
+
+.confirm-dialog-body p {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.confirm-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-gold);
+  background: var(--panel-2);
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-danger {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+}
+
+.btn-primary {
+  background: var(--gold);
+  color: #1a1a1a;
+}
+
+.btn-primary:hover {
+  background: var(--gold-strong);
+}
+
+.btn-secondary {
+  background: var(--panel);
+  color: var(--text);
+  border-color: var(--border-gold);
+}
+
+.btn-secondary:hover {
+  background: var(--panel-2);
+  border-color: var(--border-gold-strong);
+}
+
+.btn-danger {
+  background: #ef5350;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #e53935;
+}
+
+/* Map items in navigator */
+
+.map-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.map-item:hover {
+  background: var(--surface-hover);
+}
+
+.map-item-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px 0;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-item-menu {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.map-item:hover .map-item-menu {
+  opacity: 1;
+}
+
+/* Icon button */
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+
+.icon-btn:hover {
+  background: var(--surface-hover);
+}
+
+.icon-btn-danger:hover {
+  background: rgba(239, 83, 80, 0.15);
+  color: #ef5350;
+}
+
+/* Campaign card actions */
+
+.campaign-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}

@@ -9,6 +9,7 @@ import {
   useCreateCompendium,
   useCreateMap,
   useDeleteCompendium,
+  useDeleteMap,
   useInstallBuiltinPlugin,
   useInstalledPlugins,
   useInstallPlugin,
@@ -21,6 +22,7 @@ import {
 import { useUiStore } from '../stores/ui';
 import { useWorkspaceStore } from '../stores/workspace';
 import { usePlayerVisibility } from '../../shared/hooks/usePlayerVisibility';
+import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
 
 
 function parsePluginManifest(rawJson: string): {
@@ -56,11 +58,11 @@ function PluginsPanel() {
   } | null>(null);
 
   if (!activeCampaign) {
-    return (
-      <div className="empty-state">
-        Open a campaign to manage plugins.
-      </div>
-    );
+  return (
+    <div className="empty-state">
+      Откройте кампанию для управления плагинами.
+    </div>
+  );
   }
 
   const handleInstallPlugin = async () => {
@@ -69,7 +71,7 @@ function PluginsPanel() {
         multiple: false,
         filters: [
           {
-            name: 'DndStudio Plugin',
+            name: 'Плагин DndStudio',
             extensions: ['dndplugin'],
           },
         ],
@@ -93,7 +95,7 @@ function PluginsPanel() {
       {
         onError: (error: Error) => {
           alert(
-            `Failed to ${isActive ? 'activate' : 'deactivate'} plugin:\n${error.message}`,
+            `Не удалось ${isActive ? 'активировать' : 'деактивировать'} плагин:\n${error.message}`,
           );
         },
       },
@@ -131,7 +133,7 @@ function PluginsPanel() {
 
     if (
       window.confirm(
-        `Uninstall plugin "${pluginName}"? Its compendiums will be removed.`,
+        `Удалить плагин "${pluginName}"? Его компендиумы будут удалены.`,
       )
     ) {
       uninstallPlugin.mutate(pluginId);
@@ -144,25 +146,25 @@ function PluginsPanel() {
     <div className="navigator">
       {/* Built-in plugins */}
       <div className="navigator-section">
-        <div className="navigator-section-title">Built-in Plugins</div>
+        <div className="navigator-section-title">Встроенные плагины</div>
 
         <div className="builtin-plugin-card">
           <div className="builtin-plugin-info">
-            <div className="builtin-plugin-name">SRD Monsters</div>
+            <div className="builtin-plugin-name">SRD Монстры</div>
             <div className="builtin-plugin-description">
               Базовый набор монстров из SRD (8 монстров)
             </div>
           </div>
 
           {hasSrdPlugin ? (
-            <span className="builtin-plugin-installed">✓ Installed</span>
+            <span className="builtin-plugin-installed">✓ Установлен</span>
           ) : (
             <button
               type="button"
               onClick={() => handleInstallBuiltin('srd-monsters')}
               disabled={installBuiltinPlugin.isPending}
             >
-              {installBuiltinPlugin.isPending ? 'Installing…' : 'Install'}
+              {installBuiltinPlugin.isPending ? 'Установка…' : 'Установить'}
             </button>
           )}
         </div>
@@ -170,20 +172,20 @@ function PluginsPanel() {
 
       {/* Installed plugins */}
       <div className="navigator-section">
-        <div className="navigator-section-title">Installed Plugins</div>
+        <div className="navigator-section-title">Установленные плагины</div>
 
         <button
           type="button"
           onClick={handleInstallPlugin}
           disabled={installPlugin.isPending}
         >
-          {installPlugin.isPending ? 'Installing…' : 'Install .dndplugin'}
+          {installPlugin.isPending ? 'Установка…' : 'Установить .dndplugin'}
         </button>
 
-        {isLoading && <div className="empty-state">Loading plugins…</div>}
+        {isLoading && <div className="empty-state">Загрузка плагинов…</div>}
 
         {!isLoading && plugins.length === 0 && (
-          <div className="empty-state">No plugins installed.</div>
+          <div className="empty-state">Плагины не установлены.</div>
         )}
 
         <div className="plugin-list">
@@ -262,18 +264,18 @@ function PluginsPanel() {
                       <div className="plugin-dep-check">
                         {depCheckResult.result.allSatisfied ? (
                           <span className="plugin-dep-ok">
-                            ✓ All dependencies satisfied
+                            ✓ Все зависимости выполнены
                           </span>
                         ) : (
                           <div>
                             {depCheckResult.result.missing.length > 0 && (
                               <div className="plugin-dep-missing">
-                                Missing: {depCheckResult.result.missing.join(', ')}
+                                Отсутствуют: {depCheckResult.result.missing.join(', ')}
                               </div>
                             )}
                             {depCheckResult.result.inactive.length > 0 && (
                               <div className="plugin-dep-inactive">
-                                Inactive: {depCheckResult.result.inactive.join(', ')}
+                                Неактивны: {depCheckResult.result.inactive.join(', ')}
                               </div>
                             )}
                           </div>
@@ -284,30 +286,30 @@ function PluginsPanel() {
                 </label>
 
                 <div className="plugin-actions">
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    title="Validate dependencies"
-                    onClick={() => handleValidateDeps(plugin.pluginId)}
-                    disabled={validateDeps.isPending}
-                  >
-                    🔍
-                  </button>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title="Проверить зависимости"
+                      onClick={() => handleValidateDeps(plugin.pluginId)}
+                      disabled={validateDeps.isPending}
+                    >
+                      🔍
+                    </button>
 
-                  <button
-                    type="button"
-                    className="icon-btn icon-btn-danger"
-                    title="Uninstall plugin"
-                    disabled={uninstallPlugin.isPending}
-                    onClick={() =>
-                      handleUninstall(
-                        plugin.pluginId,
-                        manifest?.name ?? plugin.pluginId,
-                      )
-                    }
-                  >
-                    🗑️
-                  </button>
+                    <button
+                      type="button"
+                      className="icon-btn icon-btn-danger"
+                      title="Удалить плагин"
+                      disabled={uninstallPlugin.isPending}
+                      onClick={() =>
+                        handleUninstall(
+                          plugin.pluginId,
+                          manifest?.name ?? plugin.pluginId,
+                        )
+                      }
+                    >
+                      🗑️
+                    </button>
                 </div>
               </div>
             );
@@ -340,11 +342,11 @@ function CompendiumsPanel() {
   );
 
   if (!activeCampaign) {
-    return (
-      <div className="empty-state">
-        Open a campaign to see compendiums.
-      </div>
-    );
+  return (
+    <div className="empty-state">
+      Откройте кампанию, чтобы увидеть компендиумы.
+    </div>
+  );
   }
 
   const onCreateCompendium = (event: FormEvent) => {
@@ -399,7 +401,7 @@ function CompendiumsPanel() {
   };
 
   const handleDelete = (id: string, name: string) => {
-    if (!window.confirm(`Delete compendium "${name}" and all its entries?`)) {
+    if (!window.confirm(`Удалить компендиум "${name}" и все его записи?`)) {
       return;
     }
 
@@ -408,42 +410,42 @@ function CompendiumsPanel() {
 
   return (
     <div className="navigator">
-      <div className="navigator-section">
-        <div className="navigator-section-title">Compendiums</div>
+        <div className="navigator-section">
+          <div className="navigator-section-title">Компендиумы</div>
 
-        <form className="navigator-form" onSubmit={onCreateCompendium}>
-          <input
-            value={newCompendiumName}
-            onChange={(event) => setNewCompendiumName(event.target.value)}
-            placeholder="New compendium"
-          />
+          <form className="navigator-form" onSubmit={onCreateCompendium}>
+            <input
+              value={newCompendiumName}
+              onChange={(event) => setNewCompendiumName(event.target.value)}
+              placeholder="Новый компендиум"
+            />
 
-          <select
-            value={newCompendiumType}
-            onChange={(event) => setNewCompendiumType(event.target.value)}
-            title="Compendium type"
-          >
-            <option value="monster">Monster</option>
-            <option value="spell">Spell</option>
-            <option value="item">Item</option>
-            <option value="feat">Feat</option>
-          </select>
+            <select
+              value={newCompendiumType}
+              onChange={(event) => setNewCompendiumType(event.target.value)}
+              title="Тип компендиума"
+            >
+              <option value="monster">Монстр</option>
+              <option value="spell">Заклинание</option>
+              <option value="item">Предмет</option>
+              <option value="feat">Черта</option>
+            </select>
 
-          <button
-            type="submit"
-            disabled={!newCompendiumName.trim() || createCompendium.isPending}
-          >
-            {createCompendium.isPending ? '…' : 'Add'}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={!newCompendiumName.trim() || createCompendium.isPending}
+            >
+              {createCompendium.isPending ? '…' : 'Добавить'}
+            </button>
+          </form>
 
-        {isLoading && (
-          <div className="empty-state">Loading compendiums…</div>
-        )}
+          {isLoading && (
+            <div className="empty-state">Загрузка компендиумов…</div>
+          )}
 
-        {!isLoading && compendiums.length === 0 && (
-          <div className="empty-state">No compendiums yet.</div>
-        )}
+          {!isLoading && compendiums.length === 0 && (
+            <div className="empty-state">Компендиумов пока нет.</div>
+          )}
 
         <ul className="navigator-list">
           {compendiums.map((compendium) => {
@@ -493,26 +495,26 @@ function CompendiumsPanel() {
 
                     {!isFromPlugin && (
                       <div className="navigator-item-actions">
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          title="Rename"
-                          onClick={() =>
-                            startEditing(compendium.id, compendium.name)
-                          }
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          type="button"
-                          className="icon-btn icon-btn-danger"
-                          title="Delete"
-                          onClick={() =>
-                            handleDelete(compendium.id, compendium.name)
-                          }
-                        >
-                          🗑️
-                        </button>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title="Переименовать"
+                      onClick={() =>
+                        startEditing(compendium.id, compendium.name)
+                      }
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn icon-btn-danger"
+                      title="Удалить"
+                      onClick={() =>
+                        handleDelete(compendium.id, compendium.name)
+                      }
+                    >
+                      🗑️
+                    </button>
                       </div>
                     )}
                   </div>
@@ -536,6 +538,10 @@ function NavigatorPanel() {
   const [newCharacterType, setNewCharacterType] = useState<
     'pc' | 'npc' | 'monster'
   >('pc');
+  const [pendingDeleteMap, setPendingDeleteMap] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   const { canSeeMap, isGM } = usePlayerVisibility();
 
@@ -551,6 +557,7 @@ function NavigatorPanel() {
     useCharacters(Boolean(activeCampaign));
 
   const createMap = useCreateMap();
+  const deleteMap = useDeleteMap();
   const createCharacter = useCreateCharacter();
 
   const openMapTab = useWorkspaceStore((state) => state.openMapTab);
@@ -558,10 +565,20 @@ function NavigatorPanel() {
     (state) => state.openCharacterTab,
   );
 
+  const handleDeleteMap = () => {
+    if (!pendingDeleteMap) return;
+
+    deleteMap.mutate(pendingDeleteMap.id, {
+      onSuccess: () => {
+        setPendingDeleteMap(null);
+      },
+    });
+  };
+
   if (!activeCampaign) {
     return (
       <div className="empty-state">
-        Open a campaign to see its navigator.
+        Откройте кампанию, чтобы увидеть навигатор.
       </div>
     );
   }
@@ -569,7 +586,7 @@ function NavigatorPanel() {
   if (!isGM && visibleMaps.length === 0) {
     return (
       <div className="empty-state">
-        Waiting for GM to show a map…
+        Ожидание карты от МГ…
       </div>
     );
   }
@@ -624,13 +641,13 @@ function NavigatorPanel() {
     <div className="navigator">
       {/* Секция Персонажей */}
       <div className="navigator-section">
-        <div className="navigator-section-title">Characters</div>
+        <div className="navigator-section-title">Персонажи</div>
 
         <form className="navigator-form" onSubmit={onCreateCharacter}>
           <input
             value={newCharacterName}
             onChange={(event) => setNewCharacterName(event.target.value)}
-            placeholder="Character name"
+            placeholder="Имя персонажа"
           />
 
           <select
@@ -641,25 +658,25 @@ function NavigatorPanel() {
               )
             }
           >
-            <option value="pc">PC</option>
-            <option value="npc">NPC</option>
-            <option value="monster">Monster</option>
+            <option value="pc">Игровой</option>
+            <option value="npc">НПС</option>
+            <option value="monster">Монстр</option>
           </select>
 
           <button
             type="submit"
             disabled={!newCharacterName.trim() || createCharacter.isPending}
           >
-            {createCharacter.isPending ? '…' : 'Add'}
+            {createCharacter.isPending ? '…' : 'Добавить'}
           </button>
         </form>
 
         {areCharactersLoading && (
-          <div className="empty-state">Loading characters…</div>
+          <div className="empty-state">Загрузка персонажей…</div>
         )}
 
         {!areCharactersLoading && characters.length === 0 && (
-          <div className="empty-state">No characters yet.</div>
+          <div className="empty-state">Персонажей пока нет.</div>
         )}
 
         <ul className="navigator-list">
@@ -680,37 +697,37 @@ function NavigatorPanel() {
 
       {/* Секция Карт */}
       <div className="navigator-section">
-        <div className="navigator-section-title">Maps</div>
+        <div className="navigator-section-title">Карты</div>
 
         <form className="navigator-form" onSubmit={onCreateMap}>
           <input
             value={newMapName}
             onChange={(event) => setNewMapName(event.target.value)}
-            placeholder="New map name"
+            placeholder="Название новой карты"
           />
 
           <button
             type="submit"
             disabled={!newMapName.trim() || createMap.isPending}
           >
-            {createMap.isPending ? '…' : 'Add'}
+            {createMap.isPending ? '…' : 'Добавить'}
           </button>
         </form>
 
         {areMapsLoading && (
-          <div className="empty-state">Loading maps…</div>
+          <div className="empty-state">Загрузка карт…</div>
         )}
 
         {!areMapsLoading && maps.length === 0 && (
-          <div className="empty-state">No maps yet.</div>
+          <div className="empty-state">Карт пока нет.</div>
         )}
 
         <ul className="navigator-list">
           {visibleMaps.map((map) => (
-            <li key={map.id}>
+            <li key={map.id} className="navigator-item-row">
               <button
                 type="button"
-                className="navigator-item"
+                className="navigator-item navigator-item-grow"
                 onClick={() => openMapTab(map)}
               >
                 <span>{map.name}</span>
@@ -718,10 +735,35 @@ function NavigatorPanel() {
                   {map.width}×{map.height}
                 </small>
               </button>
+
+              <div className="navigator-item-actions">
+                <button
+                  type="button"
+                  className="icon-btn icon-btn-danger"
+                  title="Удалить карту"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPendingDeleteMap({ id: map.id, name: map.name });
+                  }}
+                >
+                  🗑️
+                </button>
+              </div>
             </li>
           ))}
         </ul>
       </div>
+
+      <ConfirmDialog
+        open={pendingDeleteMap !== null}
+        title="Удаление карты"
+        message={`Вы уверены, что хотите удалить карту "${pendingDeleteMap?.name}"? Все токены на этой карте будут удалены навсегда.`}
+        confirmLabel="Удалить"
+        cancelLabel="Отмена"
+        destructive
+        onConfirm={handleDeleteMap}
+        onCancel={() => setPendingDeleteMap(null)}
+      />
     </div>
   );
 }
