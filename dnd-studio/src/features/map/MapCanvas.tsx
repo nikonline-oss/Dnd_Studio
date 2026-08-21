@@ -6,6 +6,8 @@ import {
 } from 'react';
 import { useAssetDataUrl } from '../../shared/api/hooks';
 import type { MapSummary, TokenSummary } from '../../shared/api/bindings';
+import { useDropTarget } from '../../shared/hooks/useDropTarget';
+import { useDragStore } from '../../shared/stores/drag';
 
 interface Viewport {
     x: number;
@@ -27,6 +29,7 @@ interface MapCanvasProps {
     fogMode?: FogMode;
     hpFormatter?: (current: number, max: number, isMonster: boolean) => string;
     onFogChange?: (cells: Set<string>) => void;
+    onCreateTokenWithCharacter?: (x: number, y: number, characterId: string) => void;
 }
 
 type DragState =
@@ -104,6 +107,7 @@ export function MapCanvas({
     fogCells = new Set(),
     fogMode = 'none',
     onFogChange,
+    onCreateTokenWithCharacter
 }: MapCanvasProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -136,6 +140,37 @@ export function MapCanvas({
 
     const { data: assetDataUrl } = useAssetDataUrl(map.assetId ?? undefined);
     const tokenRadius = Math.max(10, (map.gridSize || 50) * 0.45);
+
+
+    const { ref: dropRef, isOver, isAccepting } = useDropTarget({
+        target: { kind: 'map-canvas', id: map.id },
+        accepts: (item) => item.kind === 'character' && Boolean(onCreateTokenWithCharacter),
+        onDrop: (item, target) => {
+            if (!onCreateTokenWithCharacter || !containerRef.current || !viewport) return;
+
+            // Получаем pointer из DragStore для точных координат
+            const pointer = useDragStore.getState().pointer;
+            if (!pointer) return;
+
+            const rect = containerRef.current.getBoundingClientRect();
+            const pointerX = pointer.x - rect.left;
+            const pointerY = pointer.y - rect.top;
+
+            const worldX = (pointerX - viewport.x) / viewport.scale;
+            const worldY = (pointerY - viewport.y) / viewport.scale;
+
+            onCreateTokenWithCharacter(worldX, worldY, item.id);
+        },
+    });
+
+    // Объединяем ref'ы (containerRef + dropRef)
+    const setContainerRef = useCallback(
+        (el: HTMLDivElement | null) => {
+            containerRef.current = el;
+            dropRef(el);
+        },
+        [dropRef],
+    );
 
     const fit = useCallback(() => {
         const container = containerRef.current;
@@ -723,8 +758,9 @@ export function MapCanvas({
     return (
         <div className="map-canvas-wrapper">
             <div
-                ref={containerRef}
-                className="map-canvas-container"
+                ref={setContainerRef}
+                className={`map-canvas-container ${isOver && isAccepting ? 'drop-target' : ''
+                    }`}
                 style={{
                     cursor: fogMode !== 'none' ? 'crosshair' : undefined,
                 }}

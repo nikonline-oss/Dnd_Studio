@@ -3394,3 +3394,70 @@ select:focus-visible {
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
+
+/* Drag overlay */
+
+.drag-overlay {
+  position: fixed;
+  z-index: 10000;
+  pointer-events: none;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 8px 12px;
+  border: 1px solid var(--border-gold-strong);
+  border-radius: 8px;
+
+  background: var(--panel);
+  box-shadow: 0 8px 24px var(--shadow);
+
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+
+  transform: translate(-50%, -50%);
+}
+
+.drag-overlay-icon {
+  font-size: 16px;
+}
+
+.drag-overlay-name {
+  white-space: nowrap;
+}
+
+.drag-overlay-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--gold-soft);
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* Draggable source states */
+
+.tree-character-draggable {
+  cursor: grab;
+  user-select: none;
+}
+
+.tree-node.is-dragging {
+  opacity: 0.4;
+}
+
+/* Drop target highlight */
+
+.tree-node-header.drop-target {
+  background: var(--gold-softer);
+  outline: 2px dashed var(--border-gold-strong);
+  outline-offset: -2px;
+}
+
+.map-canvas-container.drop-target {
+  outline: 3px dashed var(--border-gold-strong);
+  outline-offset: -3px;
+}

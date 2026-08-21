@@ -13,6 +13,7 @@ import { useMultiplayerSync } from '../shared/hooks/useMultiplayerSync';
 import { useUiStore } from '../shared/stores/ui';
 import { ProfileSelectScreen } from '../features/profile/ProfileSelectScreen';
 import { StartScreen } from '../features/campaign-start/StartScreen';
+import { DragOverlay } from '../shared/ui/DragOverlay';
 
 export default function App() {
   const workspaceReady = useWorkspaceStore.persist.hasHydrated();
@@ -99,6 +100,8 @@ export default function App() {
           {dropMessage}
         </div>
       )}
+
+      <DragOverlay />
     </>
   );
 }

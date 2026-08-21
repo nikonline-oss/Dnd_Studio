@@ -304,6 +304,19 @@ export function MapTab({ mapId }: { mapId?: string }) {
     setPendingImagePath(null);
   };
 
+  const handleCreateTokenWithCharacter = (
+    x: number,
+    y: number,
+    characterId: string,
+  ) => {
+    createToken.mutate({
+      mapId: map.id,
+      x,
+      y,
+      characterId,
+    });
+  };
+
   return (
     <div className="map-tab">
       <div className="map-tab-header">
@@ -414,6 +427,7 @@ export function MapTab({ mapId }: { mapId?: string }) {
         fogCells={new Set()} // Здесь должен быть реальный fogCells из состояния
         fogMode="none"
         onFogChange={handleFogChange}
+        onCreateTokenWithCharacter={handleCreateTokenWithCharacter}
       />
 
       {pendingImagePath && (

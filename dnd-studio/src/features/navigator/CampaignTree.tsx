@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 
 import {
   useActiveCampaign,
@@ -14,9 +14,13 @@ import {
 } from '../../shared/api/hooks';
 import { useTableStore } from '../../shared/stores/table';
 import { useWorkspaceStore } from '../../shared/stores/workspace';
+import { useDragStore } from '../../shared/stores/drag';
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
 
 import type { MapSummary, TokenSummary, CharacterSummary } from '../../shared/api/bindings';
+
+import { useDraggable } from '../../shared/hooks/useDraggable';
+import { useDropTarget } from '../../shared/hooks/useDropTarget';
 
 type TreeTab = 'maps' | 'characters';
 
@@ -33,6 +37,12 @@ interface PendingAdd {
   kind: AddAction;
   mapId?: string;
 }
+
+const CHARACTER_TYPE_ICONS: Record<string, string> = {
+  pc: '🧙',
+  npc: '🧑‍🌾',
+  monster: '👹',
+};
 
 export function CampaignTree() {
   const { data: activeCampaign } = useActiveCampaign();
@@ -52,6 +62,28 @@ export function CampaignTree() {
   const selectedTokenId = useTableStore((state) => state.selectedTokenId);
 
   const [activeTab, setActiveTab] = useState<TreeTab>('maps');
+  
+  // Получаем функции и состояние из drag store
+  const dragging = useDragStore((s) => s.dragging);
+  const setPreviousTab = useDragStore((s) => s.setPreviousTab);
+  const clearPreviousTab = useDragStore((s) => s.clearPreviousTab);
+
+  // Эффект для автопереключения вкладок при перетаскивании
+  useEffect(() => {
+    if (dragging) {
+      // Начинается перетаскивание: запоминаем текущую вкладку и переключаемся на карты
+      setPreviousTab(activeTab);
+      setActiveTab('maps');
+    } else {
+      // Перетаскивание закончилось: восстанавливаем предыдущую вкладку
+      const prevTab = useDragStore.getState().previousTab;
+      if (prevTab) {
+        setActiveTab(prevTab as TreeTab);
+        clearPreviousTab();
+      }
+    }
+  }, [dragging, activeTab, setPreviousTab, clearPreviousTab]);
+
   const [expandedMapIds, setExpandedMapIds] = useState<Set<string>>(new Set());
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [pendingAdd, setPendingAdd] = useState<PendingAdd | null>(null);
@@ -258,6 +290,9 @@ export function CampaignTree() {
                 mapId: token.mapId,
               })
             }
+            onCreateToken={(mapId, x, y, characterId) => {
+              createToken.mutate({ mapId, x, y, characterId });
+            }}
           />
         )}
 
@@ -378,6 +413,7 @@ interface MapsTreeProps {
   onAddMap: () => void;
   onDeleteMap: (map: MapSummary) => void;
   onDeleteToken: (token: TokenSummary) => void;
+  onCreateToken: (mapId: string, x: number, y: number, characterId: string) => void;
 }
 
 function MapsTree({
@@ -392,6 +428,7 @@ function MapsTree({
   onAddMap,
   onDeleteMap,
   onDeleteToken,
+  onCreateToken,
 }: MapsTreeProps) {
   if (maps.length === 0) {
     return (
@@ -430,103 +467,162 @@ function MapsTree({
       </div>
 
       {maps.map((map) => {
-        const isExpanded = expandedMapIds.has(map.id);
         const tokens = tokensByMapId.get(map.id) ?? [];
+        const isExpanded = expandedMapIds.has(map.id);
 
         return (
-          <div key={map.id} className="tree-node">
-            {/* Заголовок карты */}
-            <div className="tree-node-header">
-              <button
-                type="button"
-                className="tree-node-toggle"
-                onClick={() => onToggleMap(map.id)}
-                title={isExpanded ? 'Collapse' : 'Expand'}
-              >
-                {isExpanded ? '▼' : '▶'}
-              </button>
-
-              <button
-                type="button"
-                className="tree-node-label"
-                onClick={() => onOpenMap(map)}
-                title="Open map"
-              >
-                <span className="tree-node-icon">🗺️</span>
-                <span className="tree-node-name">{map.name}</span>
-                <span className="tree-node-badge">{tokens.length}</span>
-              </button>
-
-              <div className="tree-node-actions">
-                <button
-                  type="button"
-                  className="icon-btn"
-                  title="Add token"
-                  onClick={() => onAddToken(map)}
-                >
-                  ＋
-                </button>
-                <button
-                  type="button"
-                  className="icon-btn icon-btn-danger"
-                  title="Delete map"
-                  onClick={() => onDeleteMap(map)}
-                >
-                  🗑️
-                </button>
-              </div>
-            </div>
-
-            {/* Токены карты */}
-            {isExpanded && (
-              <div className="tree-children">
-                {tokens.length === 0 ? (
-                  <div className="tree-empty">No tokens</div>
-                ) : (
-                  tokens.map((token, index) => (
-                    <div
-                      key={token.id}
-                      className={`tree-node-header tree-token ${
-                        token.id === selectedTokenId ? 'selected' : ''
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        className="tree-node-label tree-token-label"
-                        onClick={() => onSelectToken(token)}
-                        title="Select token on map"
-                      >
-                        <span className="tree-node-icon">
-                          {token.characterName ? '👤' : '⬤'}
-                        </span>
-                        <span className="tree-node-name">
-                          {token.characterName ?? `Token ${index + 1}`}
-                        </span>
-                        {!token.isVisible && (
-                          <span className="tree-token-hidden" title="Hidden from players">
-                            🚫
-                          </span>
-                        )}
-                      </button>
-
-                      <div className="tree-node-actions">
-                        <button
-                          type="button"
-                          className="icon-btn icon-btn-danger"
-                          title="Delete token"
-                          onClick={() => onDeleteToken(token)}
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
+          <MapRow
+            key={map.id}
+            map={map}
+            tokens={tokens}
+            isExpanded={isExpanded}
+            selectedTokenId={selectedTokenId}
+            onToggle={() => onToggleMap(map.id)}
+            onOpen={() => onOpenMap(map)}
+            onSelectToken={onSelectToken}
+            onAddToken={() => onAddToken(map)}
+            onDropCharacter={(characterId) => {
+              onCreateToken(map.id, map.width / 2, map.height / 2, characterId);
+            }}
+            onDeleteMap={() => onDeleteMap(map)}
+            onDeleteToken={onDeleteToken}
+          />
         );
       })}
+    </div>
+  );
+}
+
+function MapRow({
+  map,
+  tokens,
+  isExpanded,
+  selectedTokenId,
+  onToggle,
+  onOpen,
+  onSelectToken,
+  onAddToken,
+  onDropCharacter,
+  onDeleteMap,
+  onDeleteToken,
+}: {
+  map: MapSummary;
+  tokens: TokenSummary[];
+  isExpanded: boolean;
+  selectedTokenId: string | null;
+  onToggle: () => void;
+  onOpen: () => void;
+  onSelectToken: (token: TokenSummary) => void;
+  onAddToken: () => void;
+  onDropCharacter: (characterId: string) => void;
+  onDeleteMap: () => void;
+  onDeleteToken: (token: TokenSummary) => void;
+}) {
+  const { ref, isOver, isAccepting } = useDropTarget({
+    target: { kind: 'map', id: map.id },
+    accepts: (item) => item.kind === 'character',
+    onDrop: (item) => {
+      if (item.kind === 'character') {
+        onDropCharacter(item.id);
+      }
+    },
+  });
+
+  return (
+    <div className="tree-node">
+      <div
+        ref={ref}
+        className={`tree-node-header ${isOver && isAccepting ? 'drop-target' : ''}`}
+      >
+        <button
+          type="button"
+          className="tree-node-toggle"
+          onClick={onToggle}
+          title={isExpanded ? 'Collapse' : 'Expand'}
+        >
+          {isExpanded ? '▼' : '▶'}
+        </button>
+
+        <button
+          type="button"
+          className="tree-node-label"
+          onClick={onOpen}
+          title="Open map"
+        >
+          <span className="tree-node-icon">🗺️</span>
+          <span className="tree-node-name">{map.name}</span>
+          <span className="tree-node-badge">{tokens.length}</span>
+        </button>
+
+        <div className="tree-node-actions">
+          <button
+            type="button"
+            className="icon-btn"
+            title="Add token"
+            onClick={onAddToken}
+          >
+            ＋
+          </button>
+          <button
+            type="button"
+            className="icon-btn icon-btn-danger"
+            title="Delete map"
+            onClick={onDeleteMap}
+          >
+            🗑️
+          </button>
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div className="tree-children">
+          {tokens.length === 0 ? (
+            <div className="tree-empty">No tokens</div>
+          ) : (
+            tokens.map((token, index) => (
+              <div
+                key={token.id}
+                className={`tree-node-header tree-token ${
+                  token.id === selectedTokenId ? 'selected' : ''
+                }`}
+              >
+                <button
+                  type="button"
+                  className="tree-node-label tree-token-label"
+                  onClick={() => onSelectToken(token)}
+                  title="Select token on map"
+                >
+                  <span className="tree-node-icon">
+                    {token.characterName ? '👤' : '⬤'}
+                  </span>
+                  <span className="tree-node-name">
+                    {token.characterName ?? `Token ${index + 1}`}
+                  </span>
+                  {!token.isVisible && (
+                    <span
+                      className="tree-token-hidden"
+                      title="Hidden from players"
+                    >
+                      🚫
+                    </span>
+                  )}
+                </button>
+
+                <div className="tree-node-actions">
+                  <button
+                    type="button"
+                    className="icon-btn icon-btn-danger"
+                    title="Delete token"
+                    onClick={() => onDeleteToken(token)}
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -541,11 +637,52 @@ interface CharactersListProps {
   onDeleteCharacter: (character: CharacterSummary) => void;
 }
 
-const CHARACTER_TYPE_ICONS: Record<string, string> = {
-  pc: '🧙',
-  npc: '🧑‍🌾',
-  monster: '👹',
-};
+function CharacterRow({
+  character,
+  type,
+  onDeleteCharacter,
+}: {
+  character: CharacterSummary;
+  type: string;
+  onDeleteCharacter: (character: CharacterSummary) => void;
+}) {
+  const { handlers, isDragging } = useDraggable({
+    item: {
+      kind: 'character',
+      id: character.id,
+      name: character.name,
+      icon: CHARACTER_TYPE_ICONS[type] ?? '👤',
+    },
+  });
+
+  return (
+    <div
+      className={`tree-node ${isDragging ? 'is-dragging' : ''}`}
+      {...handlers}
+    >
+      <div className="tree-node-header tree-character-draggable">
+        <button type="button" className="tree-node-label">
+          <span className="tree-node-icon">
+            {CHARACTER_TYPE_ICONS[type] ?? '❓'}
+          </span>
+          <span className="tree-node-name">{character.name}</span>
+          <span className="tree-node-status">{character.status}</span>
+        </button>
+
+        <div className="tree-node-actions">
+          <button
+            type="button"
+            className="icon-btn icon-btn-danger"
+            title="Delete character"
+            onClick={() => onDeleteCharacter(character)}
+          >
+            🗑️
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function CharactersList({ characters, onAddCharacter, onDeleteCharacter }: CharactersListProps) {
   if (characters.length === 0) {
@@ -611,28 +748,12 @@ function CharactersList({ characters, onAddCharacter, onDeleteCharacter }: Chara
             <div className="tree-section-title">{typeLabels[type]}</div>
 
             {list.map((character) => (
-              <div key={character.id} className="tree-node">
-                <div className="tree-node-header">
-                  <button type="button" className="tree-node-label">
-                    <span className="tree-node-icon">
-                      {CHARACTER_TYPE_ICONS[type] ?? '❓'}
-                    </span>
-                    <span className="tree-node-name">{character.name}</span>
-                    <span className="tree-node-status">{character.status}</span>
-                  </button>
-
-                  <div className="tree-node-actions">
-                    <button
-                      type="button"
-                      className="icon-btn icon-btn-danger"
-                      title="Delete character"
-                      onClick={() => onDeleteCharacter(character)}
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <CharacterRow
+                key={character.id}
+                character={character}
+                type={type}
+                onDeleteCharacter={onDeleteCharacter}
+              />
             ))}
           </div>
         );
