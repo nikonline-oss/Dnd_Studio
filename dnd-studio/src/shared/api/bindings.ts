@@ -253,6 +253,7 @@ export type CompendiumEntrySummary = {
 	entryKey: string,
 	name: string,
 	dataJson: string,
+	sourcePluginId: string | null,
 };
 
 export type CompendiumSummary = {

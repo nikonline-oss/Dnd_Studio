@@ -46,13 +46,13 @@ export function useActiveCampaign() {
   });
 }
 
-export function useCreateCampaign(profileId: string) {
+export function useCreateCampaign() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (name: string) => unwrap(commands.createCampaign(name, profileId)),
+    mutationFn: ({ name, profileId }: { name: string; profileId: string }) => unwrap(commands.createCampaign(name, profileId)),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaigns', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
       queryClient.invalidateQueries({ queryKey: ['activeCampaign'] });
     },
     onError: (error: Error) => {

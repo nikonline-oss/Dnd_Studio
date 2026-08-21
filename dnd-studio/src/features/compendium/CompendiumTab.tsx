@@ -1,39 +1,21 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import {
   useCompendiumEntries,
   useCreateCompendiumEntry,
   useDeleteCompendiumEntry,
-  useUpdateCompendiumEntry,
 } from '../../shared/api/hooks';
+import { CompendiumEntryEditor } from './CompendiumEntryEditor';
+import type { CompendiumEntrySummary } from '../../shared/api/bindings';
 
 export function CompendiumTab({ compendiumId }: { compendiumId?: string }) {
   const { data: entries = [], isLoading } = useCompendiumEntries(compendiumId);
   const createEntry = useCreateCompendiumEntry();
-  const updateEntry = useUpdateCompendiumEntry();
   const deleteEntry = useDeleteCompendiumEntry();
 
-  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [selectedEntry, setSelectedEntry] = useState<CompendiumEntrySummary | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Форма добавления
   const [newEntryName, setNewEntryName] = useState('');
-
-  // Форма редактирования
-  const [editName, setEditName] = useState('');
-  const [editDataJson, setEditDataJson] = useState('');
-  const [jsonError, setJsonError] = useState<string | null>(null);
-
-  // Синхронизация формы редактирования с выбранной записью
-  const selectedEntry = entries.find((entry) => entry.id === selectedEntryId);
-
-  useEffect(() => {
-    if (selectedEntry) {
-      setEditName(selectedEntry.name);
-      setEditDataJson(selectedEntry.dataJson);
-      setJsonError(null);
-    }
-  }, [selectedEntry?.id, selectedEntry?.name, selectedEntry?.dataJson]);
 
   const filteredEntries = useMemo(() => {
     if (!searchQuery.trim()) {
@@ -72,28 +54,6 @@ export function CompendiumTab({ compendiumId }: { compendiumId?: string }) {
     );
   };
 
-  const handleSaveEntry = () => {
-    if (!selectedEntry) return;
-
-    const name = editName.trim();
-    if (!name) return;
-
-    // Валидация JSON на клиенте
-    try {
-      JSON.parse(editDataJson);
-      setJsonError(null);
-    } catch (error) {
-      setJsonError(`Invalid JSON: ${error}`);
-      return;
-    }
-
-    updateEntry.mutate({
-      id: selectedEntry.id,
-      name,
-      dataJson: editDataJson,
-    });
-  };
-
   const handleDeleteEntry = () => {
     if (!selectedEntry) return;
 
@@ -108,7 +68,7 @@ export function CompendiumTab({ compendiumId }: { compendiumId?: string }) {
       },
       {
         onSuccess: () => {
-          setSelectedEntryId(null);
+          setSelectedEntry(null);
         },
       },
     );
@@ -156,13 +116,14 @@ export function CompendiumTab({ compendiumId }: { compendiumId?: string }) {
               key={entry.id}
               type="button"
               className={
-                selectedEntryId === entry.id
+                selectedEntry?.id === entry.id
                   ? 'compendium-item active'
                   : 'compendium-item'
               }
-              onClick={() => setSelectedEntryId(entry.id)}
+              onClick={() => setSelectedEntry(entry)}
             >
               {entry.name}
+              {entry.sourcePluginId && <span className="plugin-badge">Plugin</span>}
             </button>
           ))}
         </div>
@@ -171,54 +132,11 @@ export function CompendiumTab({ compendiumId }: { compendiumId?: string }) {
       {/* Правая панель: редактор записи */}
       <div className="compendium-content">
         {selectedEntry ? (
-          <>
-            <div className="compendium-editor-header">
-              <input
-                className="compendium-name-input"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                placeholder="Entry name"
-              />
-
-              <div className="compendium-editor-actions">
-                <button
-                  type="button"
-                  onClick={handleSaveEntry}
-                  disabled={updateEntry.isPending || !editName.trim()}
-                >
-                  {updateEntry.isPending ? 'Saving…' : 'Save'}
-                </button>
-
-                <button
-                  type="button"
-                  className="btn-danger"
-                  onClick={handleDeleteEntry}
-                  disabled={deleteEntry.isPending}
-                >
-                  {deleteEntry.isPending ? 'Deleting…' : 'Delete'}
-                </button>
-              </div>
-            </div>
-
-            <div className="compendium-editor-meta">
-              <code>{selectedEntry.entryKey}</code>
-            </div>
-
-            {jsonError && (
-              <div className="compendium-json-error">{jsonError}</div>
-            )}
-
-            <textarea
-              className="compendium-json-editor"
-              value={editDataJson}
-              onChange={(e) => {
-                setEditDataJson(e.target.value);
-                setJsonError(null);
-              }}
-              placeholder='{ "description": "..." }'
-              spellCheck={false}
-            />
-          </>
+          <CompendiumEntryEditor
+            entry={selectedEntry}
+            onClose={() => setSelectedEntry(null)}
+            onDelete={handleDeleteEntry}
+          />
         ) : (
           <div className="empty-state">
             Select an entry to view and edit.

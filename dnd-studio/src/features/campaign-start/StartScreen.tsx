@@ -15,7 +15,7 @@ export function StartScreen() {
   const activeProfileId = useUiStore((state) => state.activeProfileId);
 
   const { data: campaigns = [], isLoading } = useCampaigns(activeProfileId!);
-  const createCampaign = useCreateCampaign(activeProfileId!);
+  const createCampaign = useCreateCampaign();
   const deleteCampaign = useDeleteCampaign(activeProfileId!);
   const openCampaign = useOpenCampaign(activeProfileId!);
 
@@ -64,7 +64,7 @@ export function StartScreen() {
       return;
     }
 
-    createCampaign.mutate(name.trim());
+    createCampaign.mutate({ name: name.trim(), profileId: activeProfileId! });
     setName('');
   };
 
