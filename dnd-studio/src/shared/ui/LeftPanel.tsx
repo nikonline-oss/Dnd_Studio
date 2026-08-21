@@ -1,10 +1,9 @@
-import { FormEvent, useState } from 'react';
+import { useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
   DependencyCheckResult,
   useActiveCampaign,
   useCompendiums,
-  useCreateCompendium,
   useDeleteCompendium,
   useInstallBuiltinPlugin,
   useInstalledPlugins,
@@ -17,6 +16,7 @@ import {
 import { useUiStore } from '../stores/ui';
 import { useWorkspaceStore } from '../stores/workspace';
 import { CampaignTree } from '../../features/navigator/CampaignTree';
+import { CreateCompendiumModal } from '../../features/compendium/CreateCompendiumModal';
 
 
 function parsePluginManifest(rawJson: string): {
@@ -318,17 +318,15 @@ function PluginsPanel() {
 /* Панель Компендиев                         */
 /* ========================================= */
 function CompendiumsPanel() {
-  const [newCompendiumName, setNewCompendiumName] = useState('');
-  const [newCompendiumType, setNewCompendiumType] = useState('monster');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [isCreateCompendiumOpen, setIsCreateCompendiumOpen] = useState(false);
 
   const { data: activeCampaign } = useActiveCampaign();
   const { data: compendiums = [], isLoading } = useCompendiums(
     Boolean(activeCampaign),
   );
 
-  const createCompendium = useCreateCompendium();
   const updateCompendium = useUpdateCompendium();
   const deleteCompendium = useDeleteCompendium();
   const openCompendiumTab = useWorkspaceStore(
@@ -342,28 +340,6 @@ function CompendiumsPanel() {
     </div>
   );
   }
-
-  const onCreateCompendium = (event: FormEvent) => {
-    event.preventDefault();
-
-    const name = newCompendiumName.trim();
-
-    if (!name) {
-      return;
-    }
-
-    createCompendium.mutate(
-      {
-        name,
-        compendiumType: newCompendiumType,
-      },
-      {
-        onSuccess: () => {
-          setNewCompendiumName('');
-        },
-      },
-    );
-  };
 
   const startEditing = (id: string, currentName: string) => {
     setEditingId(id);
@@ -405,33 +381,17 @@ function CompendiumsPanel() {
   return (
     <div className="navigator">
         <div className="navigator-section">
-          <div className="navigator-section-title">Компендиумы</div>
-
-          <form className="navigator-form" onSubmit={onCreateCompendium}>
-            <input
-              value={newCompendiumName}
-              onChange={(event) => setNewCompendiumName(event.target.value)}
-              placeholder="Новый компендиум"
-            />
-
-            <select
-              value={newCompendiumType}
-              onChange={(event) => setNewCompendiumType(event.target.value)}
-              title="Тип компендиума"
-            >
-              <option value="monster">Монстр</option>
-              <option value="spell">Заклинание</option>
-              <option value="item">Предмет</option>
-              <option value="feat">Черта</option>
-            </select>
-
+          <div className="navigator-section-header">
+            <span className="navigator-section-title">Compendiums</span>
             <button
-              type="submit"
-              disabled={!newCompendiumName.trim() || createCompendium.isPending}
+              type="button"
+              className="icon-btn"
+              title="Create new compendium"
+              onClick={() => setIsCreateCompendiumOpen(true)}
             >
-              {createCompendium.isPending ? '…' : 'Добавить'}
+              ＋
             </button>
-          </form>
+          </div>
 
           {isLoading && (
             <div className="empty-state">Загрузка компендиумов…</div>
@@ -518,6 +478,11 @@ function CompendiumsPanel() {
           })}
         </ul>
       </div>
+
+      <CreateCompendiumModal
+        open={isCreateCompendiumOpen}
+        onClose={() => setIsCreateCompendiumOpen(false)}
+      />
     </div>
   );
 }

@@ -16,6 +16,8 @@ import { useTableStore } from '../../shared/stores/table';
 import { useWorkspaceStore } from '../../shared/stores/workspace';
 import { useDragStore } from '../../shared/stores/drag';
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
+import { CreateMapModal } from '../map/CreateMapModal';
+import { CreateCharacterModal } from '../character/CreateCharacterModal';
 
 import type { MapSummary, TokenSummary, CharacterSummary } from '../../shared/api/bindings';
 
@@ -62,6 +64,8 @@ export function CampaignTree() {
   const selectedTokenId = useTableStore((state) => state.selectedTokenId);
 
   const [activeTab, setActiveTab] = useState<TreeTab>('maps');
+  const [isCreateMapOpen, setIsCreateMapOpen] = useState(false);
+  const [isCreateCharacterOpen, setIsCreateCharacterOpen] = useState(false);
   
   // Получаем функции и состояние из drag store
   const dragging = useDragStore((s) => s.dragging);
@@ -241,29 +245,28 @@ export function CampaignTree() {
         </button>
         <button
           type="button"
+          className="campaign-tree-tab-add"
+          title="Create new map"
+          onClick={() => setIsCreateMapOpen(true)}
+        >
+          ＋
+        </button>
+
+        <button
+          type="button"
           className={activeTab === 'characters' ? 'active' : ''}
           onClick={() => setActiveTab('characters')}
         >
           Characters
         </button>
-
-        {/* Кнопка добавления */}
-        <div className="campaign-tree-add">
-          <button
-            type="button"
-            className="icon-btn icon-btn-add"
-            title="Add"
-            onClick={() => {
-              if (activeTab === 'maps') {
-                openAddDialog('add-map');
-              } else {
-                openAddDialog('add-character-pc');
-              }
-            }}
-          >
-            +
-          </button>
-        </div>
+        <button
+          type="button"
+          className="campaign-tree-tab-add"
+          title="Create new character"
+          onClick={() => setIsCreateCharacterOpen(true)}
+        >
+          ＋
+        </button>
       </div>
 
       {/* Контент */}
@@ -308,8 +311,19 @@ export function CampaignTree() {
               })
             }
           />
-        )}
-      </div>
+      )}
+
+      {/* Модалки */}
+      <CreateMapModal
+        open={isCreateMapOpen}
+        onClose={() => setIsCreateMapOpen(false)}
+      />
+
+      <CreateCharacterModal
+        open={isCreateCharacterOpen}
+        onClose={() => setIsCreateCharacterOpen(false)}
+      />
+    </div>
 
       {/* Диалог подтверждения удаления */}
       <ConfirmDialog
