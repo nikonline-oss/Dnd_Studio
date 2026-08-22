@@ -1243,3 +1243,79 @@ export function useDeleteCharacter() {
     },
   });
 }
+
+export function useCreateServerCampaign() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      name,
+      profileId,
+      serverUrl,
+      roomName,
+      accessCode,
+    }: {
+      name: string;
+      profileId: string;
+      serverUrl: string;
+      roomName: string;
+      accessCode?: string;
+    }) =>
+      unwrap(
+        commands.createServerCampaign(
+          name,
+          profileId,
+          serverUrl,
+          roomName,
+          accessCode ?? null,
+        ),
+      ),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['activeCampaign'] });
+    },
+
+    onError: (error) => {
+      console.error('Failed to create server campaign:', error.message);
+    },
+  });
+}
+
+export function useJoinServerCampaign() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      profileId,
+      serverUrl,
+      roomId,
+      token,
+      displayName,
+    }: {
+      profileId: string;
+      serverUrl: string;
+      roomId: string;
+      token: string;
+      displayName: string;
+    }) =>
+      unwrap(
+        commands.joinServerCampaign(
+          profileId,
+          serverUrl,
+          roomId,
+          token,
+          displayName,
+        ),
+      ),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['activeCampaign'] });
+    },
+
+    onError: (error) => {
+      console.error('Failed to join server campaign:', error.message);
+    },
+  });
+}

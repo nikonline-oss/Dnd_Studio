@@ -7,6 +7,7 @@ import { useWorkspaceStore } from '../stores/workspace';
 
 import { Menu, MenuBar, MenuDivider, MenuItem } from './menu/Menu';
 import { ThemeSelector } from './ThemeSelector';
+import { ConfirmDialog } from './ConfirmDialog';
 import { CreateMapModal } from '../../features/map/CreateMapModal';
 import { CreateCharacterModal } from '../../features/character/CreateCharacterModal';
 
@@ -36,6 +37,7 @@ export function TopBar() {
   // Модалки
   const [isCreateMapOpen, setIsCreateMapOpen] = useState(false);
   const [isCreateCharacterOpen, setIsCreateCharacterOpen] = useState(false);
+  const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
 
   // ============================================
   // Handlers
@@ -81,6 +83,32 @@ export function TopBar() {
 
   const handleNewMap = () => setIsCreateMapOpen(true);
   const handleNewCharacter = () => setIsCreateCharacterOpen(true);
+
+  // ============================================
+  // Logout
+  // ============================================
+
+  const setActiveProfile = useUiStore((state) => state.setActiveProfile);
+
+  const handleLogout = () => {
+    setIsLogoutDialogOpen(true);
+  };
+
+  const confirmLogout = () => {
+    // Закрываем текущую кампанию
+    closeCampaign.mutate();
+
+    // Сбрасываем профиль
+    setActiveProfile(null, null);
+
+    // Закрываем все вкладки
+    const workspaceStore = useWorkspaceStore.getState();
+    workspaceStore.tabs.forEach((tab) => {
+      workspaceStore.closeTab(tab.id);
+    });
+
+    setIsLogoutDialogOpen(false);
+  };
 
   // ============================================
   // Keyboard Shortcuts
@@ -216,7 +244,31 @@ export function TopBar() {
             <span className="topbar-breadcrumb-text">{crumb}</span>
           </span>
         ))}
+
+        {/* Кнопка выхода из профиля */}
+        {activeProfileId && (
+          <button
+            type="button"
+            className="topbar-logout-btn"
+            onClick={handleLogout}
+            title="Выйти из профиля"
+          >
+            🚪
+          </button>
+        )}
       </div>
+
+      {/* Диалог подтверждения выхода */}
+      <ConfirmDialog
+        open={isLogoutDialogOpen}
+        title="Выйти из профиля?"
+        message="Все несохранённые изменения будут потеряны. Вы уверены?"
+        confirmLabel="Выйти"
+        cancelLabel="Отмена"
+        destructive
+        onConfirm={confirmLogout}
+        onCancel={() => setIsLogoutDialogOpen(false)}
+      />
 
       {/* Модалки */}
       <CreateMapModal

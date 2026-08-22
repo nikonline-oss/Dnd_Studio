@@ -183,6 +183,10 @@ export const commands = {
 	exportCampaignZipToTemp: () => typedError<string, AppError>(__TAURI_INVOKE("export_campaign_zip_to_temp")),
 	/**  Сохраняет мультиплеерную кампанию из ZIP (db + assets) в директорию профиля. */
 	saveMultiplayerCampaignZip: (roomId: string, serverUrl: string, role: string, displayName: string, zipData: number[], profileId: string) => typedError<string, AppError>(__TAURI_INVOKE("save_multiplayer_campaign_zip", { roomId, serverUrl, role, displayName, zipData, profileId })),
+	/**  Создание серверной кампании ГМ-ом (создаёт локально + загружает на сервер) */
+	createServerCampaign: (name: string, profileId: string, serverUrl: string, roomName: string, accessCode: string | null) => typedError<CampaignSummary, AppError>(__TAURI_INVOKE("create_server_campaign", { name, profileId, serverUrl, roomName, accessCode })),
+	/**  Присоединение игрока к серверной кампании */
+	joinServerCampaign: (profileId: string, serverUrl: string, roomId: string, token: string, displayName: string) => typedError<CampaignSummary, AppError>(__TAURI_INVOKE("join_server_campaign", { profileId, serverUrl, roomId, token, displayName })),
 	/**  Устанавливает видимость карты для игроков */
 	setMapVisibleToPlayers: (mapId: string, isVisible: boolean) => typedError<MapSummary, AppError>(__TAURI_INVOKE("set_map_visible_to_players", { mapId, isVisible })),
 	/**  Устанавливает активную сцену (карту, которую видят игроки) */
@@ -226,7 +230,11 @@ export type CampaignSummary = {
 	fileName: string,
 	createdAt: number,
 	lastOpenedAt: number | null,
+	campaignType?: CampaignType,
+	serverConfig?: ServerConfig | null,
 };
+
+export type CampaignType = "local" | "server";
 
 export type CharacterDetail = {
 	id: string,
@@ -253,7 +261,6 @@ export type CompendiumEntrySummary = {
 	entryKey: string,
 	name: string,
 	dataJson: string,
-	sourcePluginId: string | null,
 };
 
 export type CompendiumSummary = {
@@ -381,6 +388,14 @@ export type ProfileInfo = {
 	avatarPath: string | null,
 	createdAt: number,
 	lastActiveAt: number,
+};
+
+export type ServerConfig = {
+	serverUrl: string,
+	roomId: string,
+	token: string,
+	displayName: string,
+	role: string,
 };
 
 export type TokenSummary = {

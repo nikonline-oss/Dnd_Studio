@@ -1,8 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { relayClient } from '../../shared/services/relayClient';
 import { useUiStore } from '../../shared/stores/ui';
-import { checkCampaignAvailability, deleteMultiplayerSession, downloadAndOpenCampaign, getMultiplayerSessions, MultiplayerSession, uploadCampaignToRelay } from '../../shared/services/campaignSharing';
+import {
+    deleteMultiplayerSession,
+    fetchCampaignEntities,
+    getMultiplayerSessions,
+    uploadCampaignToRelay,
+} from '../../shared/services/campaignSharing';
 import { MultiplayerSessionInfo } from '../../shared/api/bindings';
 import { useOpenMultiplayerCampaign } from '../../shared/api/hooks';
 
@@ -35,6 +40,7 @@ export function ConnectionPanel() {
     // Состояние для прогресса
     const [uploadProgress, setUploadProgress] = useState<number | null>(null);
     const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
+    const isCancelling = useRef(false);
 
     // Инициализация displayName из профиля
 
@@ -58,6 +64,7 @@ export function ConnectionPanel() {
     const handleJoinRoom = async () => {
         setError(null);
         setDownloadProgress(null);
+        isCancelling.current = false;
 
         if (!activeProfileId) {
             setError('No active profile. Please select a profile first.');
@@ -65,24 +72,16 @@ export function ConnectionPanel() {
         }
 
         try {
-            const campaignInfo = await checkCampaignAvailability(serverUrl, roomId);
+            // 1. Запрашиваем отфильтрованные данные кампании с сервера
+            const entities = await fetchCampaignEntities(serverUrl, roomId, token);
+            console.log('[ConnectionPanel] Campaign entities:', entities);
 
-            if (campaignInfo.hasCampaign) {
-                setDownloadProgress(0);
-
-                // Используем новый метод с profile_id
-                await downloadAndOpenCampaign(
-                    serverUrl,
-                    roomId,
-                    'player',
-                    displayName || 'Player',
-                    activeProfileId,  // Передать profile_id
-                    (percent) => setDownloadProgress(percent),
-                );
-
-                setDownloadProgress(null);
+            // Проверяем, не отменил ли пользователь
+            if (isCancelling.current) {
+                return;
             }
 
+            // 2. Подключаемся через WebSocket
             await relayClient.connect({
                 serverUrl,
                 roomId,
@@ -90,8 +89,10 @@ export function ConnectionPanel() {
                 displayName: displayName || 'Player',
             });
         } catch (e) {
-            setDownloadProgress(null);
-            setError(e instanceof Error ? e.message : 'Connection failed');
+            if (!isCancelling.current) {
+                setDownloadProgress(null);
+                setError(e instanceof Error ? e.message : 'Connection failed');
+            }
         }
     };
 
@@ -105,6 +106,7 @@ export function ConnectionPanel() {
         }
 
         try {
+            // 1. Создаём комнату на сервере
             const response = await fetch(`${serverUrl.replace(/^ws/, 'http')}/api/rooms`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -123,6 +125,7 @@ export function ConnectionPanel() {
             const data = await response.json();
             setCreatedRoom(data);
 
+            // 2. Загружаем кампанию на сервер (ZIP)
             setUploadProgress(0);
             await uploadCampaignToRelay(
                 {
@@ -135,6 +138,7 @@ export function ConnectionPanel() {
             );
             setUploadProgress(null);
 
+            // 3. Подключаемся как GM через WebSocket
             await relayClient.connect({
                 serverUrl,
                 roomId: data.room_id,
@@ -151,6 +155,12 @@ export function ConnectionPanel() {
     const handleDisconnect = () => {
         relayClient.disconnect();
         setCreatedRoom(null);
+        setError(null);
+    };
+
+    const handleCancelConnection = () => {
+        isCancelling.current = true;
+        relayClient.disconnect();
         setError(null);
     };
 
@@ -326,6 +336,7 @@ export function ConnectionPanel() {
                             value={roomId}
                             onChange={(e) => setRoomId(e.target.value)}
                             placeholder="Room ID"
+                            disabled={isConnecting}
                         />
                     </label>
 
@@ -336,16 +347,33 @@ export function ConnectionPanel() {
                             onChange={(e) => setToken(e.target.value)}
                             placeholder="GM token or access code"
                             type="password"
+                            disabled={isConnecting}
                         />
                     </label>
 
-                    <button
-                        type="button"
-                        onClick={handleJoinRoom}
-                        disabled={isConnecting || !roomId}
-                    >
-                        {isConnecting ? 'Connecting…' : 'Join'}
-                    </button>
+                    <div className="connection-buttons">
+                        {isConnecting ? (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={handleCancelConnection}
+                                    className="btn-danger"
+                                >
+                                    Cancel
+                                </button>
+                                <span className="connection-status-text">Connecting...</span>
+                            </>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={handleJoinRoom}
+                                disabled={!roomId || !token}
+                                className="btn-primary"
+                            >
+                                Join
+                            </button>
+                        )}
+                    </div>
                 </>
             ) : (
                 <>

@@ -1,5 +1,5 @@
 use crate::state::{AppPaths, AppState};
-use dnd_core::{ActiveCampaign, AppError, CampaignSummary};
+use dnd_core::{ActiveCampaign, AppError, CampaignSummary, CampaignType, ServerConfig};
 use dnd_db::{CampaignDb, CampaignIndexStore};
 use std::fs;
 use tauri::State;
@@ -92,6 +92,8 @@ pub async fn create_campaign(
         file_name: file_name.clone(),
         created_at: now,
         last_opened_at: Some(now),
+        campaign_type: CampaignType::Local,
+        server_config: None,
     };
 
     // Добавляем в index
@@ -172,11 +174,8 @@ pub async fn open_campaign(
 
     // Обновляем last_opened_at
     let now = dnd_db::now_unix();
-    let updated_summary = CampaignSummary {
-        last_opened_at: Some(now),
-        ..summary.clone()
-    };
-
+    let mut updated_summary = summary.clone();
+    updated_summary.last_opened_at = Some(now);
     index_store.upsert(updated_summary.clone())?;
 
     Ok(updated_summary)
@@ -315,10 +314,8 @@ pub async fn rename_campaign(
     }
 
     // Обновляем в index
-    let updated_summary = CampaignSummary {
-        name: new_name,
-        ..summary.clone()
-    };
+    let mut updated_summary = summary.clone();
+    updated_summary.name = new_name;
 
     index_store.upsert(updated_summary.clone())?;
 
@@ -343,4 +340,240 @@ pub async fn get_campaign_assets_dir(
     }
 
     Ok(assets_dir.to_string_lossy().to_string())
+}
+
+/// Создание серверной кампании ГМ-ом (создаёт локально + загружает на сервер)
+#[tauri::command]
+#[specta::specta]
+pub async fn create_server_campaign(
+    state: State<'_, AppState>,
+    paths: State<'_, AppPaths>,
+    name: String,
+    profile_id: String,
+    server_url: String,
+    room_name: String,
+    access_code: Option<String>,
+) -> Result<CampaignSummary, AppError> {
+    use dnd_db::CampaignIndexStore;
+    use std::fs;
+
+    // 1. Создаём обычную локальную кампанию
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err(AppError::Validation("Campaign name is required".to_string()));
+    }
+
+    let campaigns_dir = paths.profile_campaigns_dir(&profile_id);
+    fs::create_dir_all(&campaigns_dir).map_err(AppError::io)?;
+
+    let campaign_id = uuid::Uuid::new_v4().to_string();
+    let file_name = campaign_file_name(&name, &campaign_id);
+    let db_path = campaigns_dir.join(&file_name);
+
+    if db_path.exists() {
+        return Err(AppError::Validation(format!(
+            "Campaign file already exists: {}",
+            file_name
+        )));
+    }
+
+    let db = CampaignDb::create(&db_path).await?;
+    let now = dnd_db::now_unix();
+
+    db.set_meta("id", &campaign_id).await?;
+    db.set_meta("name", &name).await?;
+    db.set_meta("created_at", &now.to_string()).await?;
+    db.set_meta("profile_id", &profile_id).await?;
+    db.create_default_world().await?;
+    drop(db);
+
+    let summary = CampaignSummary {
+        id: campaign_id.clone(),
+        name: name.clone(),
+        file_name: file_name.clone(),
+        created_at: now,
+        last_opened_at: Some(now),
+        campaign_type: CampaignType::Local,
+        server_config: None,
+    };
+
+    let index_store = CampaignIndexStore::new(paths.profile_index_file(&profile_id));
+    index_store.upsert(summary.clone())?;
+
+    // Открываем созданную кампанию и помещаем в state (нужно для экспорта)
+    let db = CampaignDb::open(&db_path).await?;
+    let db_path_str = db_path.to_string_lossy().to_string();
+    println!("[create_server_campaign] Opening DB: {}", db_path_str);
+    
+    {
+        let mut current = state.campaign.lock().await;
+        *current = Some(db);
+        println!("[create_server_campaign] DB stored in state");
+    }
+
+    // 2. Экспортируем её в ZIP
+    println!("[create_server_campaign] Exporting to ZIP...");
+    let temp_zip_path = crate::commands::campaign_io::export_campaign_zip_to_temp_internal(&state).await?;
+    println!("[create_server_campaign] ZIP created at: {}", temp_zip_path);
+    let zip_data = fs::read(&temp_zip_path).map_err(AppError::io)?;
+    println!("[create_server_campaign] ZIP size: {} bytes", zip_data.len());
+    let _ = fs::remove_file(&temp_zip_path);
+    println!("[create_server_campaign] Temporary ZIP deleted");
+
+    // 3. Создаём комнату на Relay Server
+    let http_url = server_url.trim_start_matches("ws://").trim_start_matches("wss://");
+    let create_room_url = format!("http://{}/api/rooms", http_url);
+
+    let client = reqwest::Client::new();
+    let response = client.post(&create_room_url)
+        .json(&serde_json::json!({
+            "room_name": room_name,
+            "gm_name": "GM",
+            "max_players": 10,
+            "access_code": access_code
+        }))
+        .send()
+        .await
+        .map_err(|e| AppError::Validation(format!("Failed to create room: {}", e)))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        return Err(AppError::Validation(format!("Failed to create room: {} {}", status, text)));
+    }
+
+    let room_data: serde_json::Value = response.json().await.map_err(|_| {
+        AppError::Validation("Invalid server response".to_string())
+    })?;
+    let room_id = room_data["room_id"].as_str().unwrap_or("").to_string();
+    let gm_token = room_data["gm_token"].as_str().unwrap_or("").to_string();
+
+    if room_id.is_empty() || gm_token.is_empty() {
+        return Err(AppError::Validation("Invalid server response: missing room_id or gm_token".to_string()));
+    }
+
+    // 4. Загружаем ZIP кампании на сервер
+    let upload_url = format!("http://{}/api/rooms/{}/campaign", http_url, room_id);
+    let upload_response = client.post(&upload_url)
+        .body(zip_data)
+        .header("Content-Type", "application/octet-stream")
+        .send()
+        .await
+        .map_err(|e| AppError::Validation(format!("Failed to upload campaign: {}", e)))?;
+
+    if !upload_response.status().is_success() {
+        let status = upload_response.status();
+        let text = upload_response.text().await.unwrap_or_default();
+        return Err(AppError::Validation(format!("Failed to upload campaign: {} {}", status, text)));
+    }
+
+    // 5. Обновляем метаданные кампании (открываем заново, т.к. db была перемещена в state)
+    let mut db = CampaignDb::open(&db_path).await?;
+    let server_config = ServerConfig {
+        server_url: server_url.clone(),
+        room_id: room_id.clone(),
+        token: gm_token.clone(),
+        display_name: "GM".to_string(),
+        role: "gm".to_string(),
+    };
+
+    db.set_meta("campaign_type", "server").await?;
+    db.set_meta("server_config", &serde_json::to_string(&server_config).unwrap()).await?;
+    drop(db);
+
+    // Обновляем в индексе
+    let mut updated_summary = summary.clone();
+    updated_summary.campaign_type = CampaignType::Server;
+    updated_summary.server_config = Some(server_config.clone());
+    index_store.upsert(updated_summary.clone())?;
+
+    Ok(updated_summary)
+}
+
+/// Присоединение игрока к серверной кампании
+#[tauri::command]
+#[specta::specta]
+pub async fn join_server_campaign(
+    state: State<'_, AppState>,
+    paths: State<'_, AppPaths>,
+    profile_id: String,
+    server_url: String,
+    room_id: String,
+    token: String,
+    display_name: String,
+) -> Result<CampaignSummary, AppError> {
+    use dnd_db::CampaignIndexStore;
+    use std::fs;
+
+    let http_url = server_url.trim_start_matches("ws://").trim_start_matches("wss://");
+
+    // 1. Получаем отфильтрованные данные с сервера
+    let entities_url = format!("http://{}/api/rooms/{}/entities?token={}", http_url, room_id, token);
+    let client = reqwest::Client::new();
+    let response = client.get(&entities_url)
+        .send()
+        .await
+        .map_err(|e| AppError::Validation(format!("Failed to connect to server: {}", e)))?;
+
+    if response.status() == 404 {
+        return Err(AppError::Validation("Комната не найдена или кампания не загружена ГМ-ом".to_string()));
+    }
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        return Err(AppError::Validation(format!("Server error: {} {}", status, text)));
+    }
+
+    let _entities: serde_json::Value = response.json().await.map_err(|_| {
+        AppError::Validation("Invalid server data".to_string())
+    })?;
+
+    // 2. Создаём новую локальную БД для этой сессии
+    let campaign_id = uuid::Uuid::new_v4().to_string();
+    let file_name = format!("server_{}.db", &campaign_id[..8]);
+    let campaigns_dir = paths.profile_campaigns_dir(&profile_id);
+    fs::create_dir_all(&campaigns_dir).map_err(AppError::io)?;
+
+    let db_path = campaigns_dir.join(&file_name);
+    let db = CampaignDb::create(&db_path).await?;
+
+    // 3. Заполняем метаданные
+    let now = dnd_db::now_unix();
+    let server_config = ServerConfig {
+        server_url: server_url.clone(),
+        room_id: room_id.clone(),
+        token: token.clone(),
+        display_name: display_name.clone(),
+        role: "player".to_string(),
+    };
+
+    db.set_meta("id", &campaign_id).await?;
+    db.set_meta("name", &format!("Multiplayer: {}", room_id)).await?;
+    db.set_meta("created_at", &now.to_string()).await?;
+    db.set_meta("profile_id", &profile_id).await?;
+    db.set_meta("campaign_type", "server").await?;
+    db.set_meta("server_config", &serde_json::to_string(&server_config).unwrap()).await?;
+    db.create_default_world().await?;
+
+    // 4. Сохраняем в индекс
+    let summary = CampaignSummary {
+        id: campaign_id.clone(),
+        name: format!("Multiplayer: {}", room_id),
+        file_name: file_name.clone(),
+        created_at: now,
+        last_opened_at: Some(now),
+        campaign_type: CampaignType::Server,
+        server_config: Some(server_config.clone()),
+    };
+
+    let index_store = CampaignIndexStore::new(paths.profile_index_file(&profile_id));
+    index_store.upsert(summary.clone())?;
+
+    // 5. Открываем кампанию
+    {
+        let mut current = state.campaign.lock().await;
+        *current = Some(db);
+    }
+
+    Ok(summary)
 }

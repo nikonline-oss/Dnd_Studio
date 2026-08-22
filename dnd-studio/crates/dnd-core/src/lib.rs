@@ -13,6 +13,33 @@ pub struct CampaignSummary {
     pub file_name: String,
     pub created_at: i32,
     pub last_opened_at: Option<i32>,
+    #[serde(default)]
+    pub campaign_type: CampaignType,
+    #[serde(default)]
+    pub server_config: Option<ServerConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum CampaignType {
+    Local,
+    Server,
+}
+
+impl Default for CampaignType {
+    fn default() -> Self {
+        CampaignType::Local
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerConfig {
+    pub server_url: String,
+    pub room_id: String,
+    pub token: String,
+    pub display_name: String,
+    pub role: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]

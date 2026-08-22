@@ -505,6 +505,47 @@ impl CampaignDb {
         Ok(rows.into_iter().map(row_to_token).collect())
     }
 
+    /// Возвращает все токены кампании (для использования в CampaignManager)
+    pub async fn list_all_tokens(&self) -> Result<Vec<TokenSummary>, AppError> {
+        let rows = sqlx::query_as::<
+            _,
+            (
+                String, String, Option<String>, Option<String>, f64, f64, f64, f64, i32, String, i32, Option<String>,
+            ),
+        >(
+            r#"
+            SELECT
+                t.id, t.map_id, t.character_id, t.asset_id,
+                t.x, t.y, t.rotation, t.scale, t.is_visible, t.layer, t.version,
+                c.name
+            FROM tokens t
+            LEFT JOIN characters c ON c.id = t.character_id
+            ORDER BY t.map_id, t.rowid
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(AppError::db)?;
+
+        Ok(rows.into_iter().map(|row| {
+            let (id, map_id, character_id, asset_id, x, y, rotation, scale, is_visible, layer, version, character_name) = row;
+            TokenSummary {
+                id,
+                map_id,
+                character_id,
+                asset_id,
+                x,
+                y,
+                rotation,
+                scale,
+                is_visible: is_visible != 0,
+                layer,
+                version,
+                character_name,
+            }
+        }).collect())
+    }
+
     pub async fn move_token(
         &self,
         map_id: &str,

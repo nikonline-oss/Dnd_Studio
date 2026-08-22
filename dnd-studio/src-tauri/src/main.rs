@@ -8,8 +8,8 @@ use commands::assets::{
     list_assets, read_campaign_asset_data_url, read_file_as_data_url,
 };
 use commands::campaign::{
-    close_campaign, create_campaign, delete_campaign, get_active_campaign, get_campaign_assets_dir,
-    list_campaigns, open_campaign, rename_campaign,
+    close_campaign, create_campaign, create_server_campaign, delete_campaign, get_active_campaign,
+    get_campaign_assets_dir, join_server_campaign, list_campaigns, open_campaign, rename_campaign,
 };
 use commands::campaign_io::{
     delete_multiplayer_session, delete_temp_file, export_campaign, export_campaign_to_temp,
@@ -130,6 +130,8 @@ fn main() {
             delete_campaign,
             export_campaign_zip_to_temp,
             save_multiplayer_campaign_zip,
+            create_server_campaign,
+            join_server_campaign,
             set_map_visible_to_players,
             set_active_scene,
             delete_map,

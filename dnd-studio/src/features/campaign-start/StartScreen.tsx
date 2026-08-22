@@ -1,12 +1,16 @@
 import { FormEvent, useState } from 'react';
-import { useCampaigns, useCreateCampaign, useDeleteCampaign, useOpenCampaign } from '../../shared/api/hooks';
+import { useCampaigns, useCreateCampaign, useCreateServerCampaign, useDeleteCampaign, useOpenCampaign } from '../../shared/api/hooks';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useImportCampaign } from '../../shared/api/hooks';
 import { useUiStore } from '../../shared/stores/ui';
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog';
 
 export function StartScreen() {
+  const [campaignType, setCampaignType] = useState<'local' | 'server'>('local');
   const [name, setName] = useState('');
+  const [serverUrl, setServerUrl] = useState('ws://localhost:3001');
+  const [roomName, setRoomName] = useState('');
+  const [accessCode, setAccessCode] = useState('');
   const [pendingDelete, setPendingDelete] = useState<{
     id: string;
     name: string;
@@ -16,6 +20,7 @@ export function StartScreen() {
 
   const { data: campaigns = [], isLoading } = useCampaigns(activeProfileId!);
   const createCampaign = useCreateCampaign();
+  const createServerCampaign = useCreateServerCampaign();
   const deleteCampaign = useDeleteCampaign(activeProfileId!);
   const openCampaign = useOpenCampaign(activeProfileId!);
 
@@ -64,7 +69,25 @@ export function StartScreen() {
       return;
     }
 
-    createCampaign.mutate({ name: name.trim(), profileId: activeProfileId! });
+    if (campaignType === 'local') {
+      createCampaign.mutate({ name: name.trim(), profileId: activeProfileId! });
+    } else {
+      if (!serverUrl.trim()) {
+        alert('Введите адрес Relay Server');
+        return;
+      }
+      if (!roomName.trim()) {
+        alert('Введите название комнаты');
+        return;
+      }
+      createServerCampaign.mutate({
+        name: name.trim(),
+        profileId: activeProfileId!,
+        serverUrl: serverUrl.trim(),
+        roomName: roomName.trim(),
+        accessCode: accessCode || undefined,
+      });
+    }
     setName('');
   };
 
@@ -75,13 +98,73 @@ export function StartScreen() {
         <p>Создайте или откройте кампанию для начала работы.</p>
 
         <form className="start-form" onSubmit={onSubmit}>
+          {/* Переключатель типа кампании */}
+          <div className="form-field">
+            <label>Тип кампании</label>
+            <div className="radio-group">
+              <label>
+                <input
+                  type="radio"
+                  value="local"
+                  checked={campaignType === 'local'}
+                  onChange={() => setCampaignType('local')}
+                />
+                Локальная (офлайн)
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  value="server"
+                  checked={campaignType === 'server'}
+                  onChange={() => setCampaignType('server')}
+                />
+                Серверная (мультиплеер)
+              </label>
+            </div>
+          </div>
+
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Название кампании"
           />
-          <button type="submit" disabled={createCampaign.isPending || !name.trim()}>
-            {createCampaign.isPending ? 'Создание…' : 'Создать кампанию'}
+
+          {campaignType === 'server' && (
+            <>
+              <input
+                value={serverUrl}
+                onChange={(event) => setServerUrl(event.target.value)}
+                placeholder="Адрес Relay Server (ws://localhost:3001)"
+              />
+              <input
+                value={roomName}
+                onChange={(event) => setRoomName(event.target.value)}
+                placeholder="Название комнаты"
+              />
+              <input
+                value={accessCode}
+                onChange={(event) => setAccessCode(event.target.value)}
+                placeholder="Код доступа (опционально)"
+                type="password"
+              />
+            </>
+          )}
+
+          <button
+            type="submit"
+            disabled={
+              (createCampaign.isPending || createServerCampaign.isPending) ||
+              !name.trim() ||
+              (campaignType === 'server' && (!serverUrl.trim() || !roomName.trim()))
+            }
+          >
+            {createCampaign.isPending
+              ? 'Создание…'
+              : createServerCampaign.isPending
+              ? 'Создание и загрузка…'
+              : campaignType === 'local'
+              ? 'Создать кампанию'
+              : 'Создать серверную кампанию'}
           </button>
         </form>
 
@@ -100,6 +183,26 @@ export function StartScreen() {
             Не удалось создать кампанию.
           </div>
         )}
+
+        {createServerCampaign.isError && (
+          <div className="error-text">
+            Не удалось создать серверную кампанию. Проверьте соединение с сервером.
+          </div>
+        )}
+
+        <div className="start-join-server">
+          <a
+            href="#"
+            className="link-button"
+            onClick={(e) => {
+              e.preventDefault();
+              // TODO: Открыть модальное окно присоединения
+              alert('Функция присоединения к серверной кампании будет доступна в следующем обновлении');
+            }}
+          >
+            👥 Присоединиться к игре
+          </a>
+        </div>
 
         <section className="recent-campaigns">
           <h2>Последние кампании</h2>

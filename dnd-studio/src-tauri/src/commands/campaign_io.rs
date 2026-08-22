@@ -1,6 +1,6 @@
 use crate::commands::require_db;
 use crate::state::{AppPaths, AppState};
-use dnd_core::{AppError, CampaignSummary};
+use dnd_core::{AppError, CampaignSummary, CampaignType};
 use dnd_db::{CampaignDb, CampaignIndexStore};
 use std::fs;
 use std::io::{Read, Write};
@@ -231,6 +231,8 @@ pub async fn import_campaign(
         file_name,
         created_at,
         last_opened_at: Some(dnd_db::now_unix()),
+        campaign_type: CampaignType::Local,
+        server_config: None,
     };
 
     // Добавляем в index профиля
@@ -329,6 +331,73 @@ pub async fn save_multiplayer_campaign(
     Ok(db_path.to_string_lossy().to_string())
 }
 
+/// Внутренняя версия для экспорта ZIP без State (для create_server_campaign)
+pub async fn export_campaign_zip_to_temp_internal(
+    state: &crate::state::AppState,
+) -> Result<String, AppError> {
+    let db = require_db(&state.campaign).await?;
+    println!("[export_campaign_zip_to_temp_internal] DB obtained from state");
+
+    let db_path = db.path().to_path_buf();
+    let db_path_str = db_path.to_string_lossy().to_string();
+    println!("[export_campaign_zip_to_temp_internal] DB path: {}", db_path_str);
+
+    if !db_path.exists() {
+        return Err(AppError::Io(format!("Campaign database not found at: {}", db_path_str)));
+    }
+
+    // Backup DB to temp file
+    let temp_db_path =
+        std::env::temp_dir().join(format!("dndstudio_mp_db_{}.db", uuid::Uuid::new_v4()));
+
+    println!("[export_campaign_zip_to_temp_internal] Backing up DB to temp...");
+    db.backup_to(&temp_db_path).await?;
+    println!("[export_campaign_zip_to_temp_internal] Backup created");
+
+    let temp_zip_path =
+        std::env::temp_dir().join(format!("dndstudio_mp_{}.dndcampaign", uuid::Uuid::new_v4()));
+
+    let file = fs::File::create(&temp_zip_path).map_err(AppError::io)?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = SimpleFileOptions::default();
+
+    // 1. db.sqlite
+    zip.start_file("db.sqlite", options).map_err(AppError::io)?;
+
+    let mut db_file = fs::File::open(&temp_db_path).map_err(AppError::io)?;
+    let mut db_bytes = Vec::new();
+    db_file.read_to_end(&mut db_bytes).map_err(AppError::io)?;
+    zip.write_all(&db_bytes).map_err(AppError::io)?;
+
+    let _ = fs::remove_file(&temp_db_path);
+
+    // 2. assets/
+    let assets_dir = db.assets_dir();
+
+    if assets_dir.exists() && assets_dir.is_dir() {
+        for entry in fs::read_dir(&assets_dir).map_err(AppError::io)? {
+            let entry = entry.map_err(AppError::io)?;
+            let path = entry.path();
+
+            if path.is_file() {
+                if let Some(relative) = path.strip_prefix(&assets_dir).ok() {
+                    let zip_path = format!("assets/{}", relative.display());
+                    zip.start_file(&zip_path, options).map_err(AppError::io)?;
+
+                    let mut file = fs::File::open(&path).map_err(AppError::io)?;
+                    let mut bytes = Vec::new();
+                    file.read_to_end(&mut bytes).map_err(AppError::io)?;
+                    zip.write_all(&bytes).map_err(AppError::io)?;
+                }
+            }
+        }
+    }
+
+    zip.finish().map_err(AppError::io)?;
+
+    Ok(temp_zip_path.to_string_lossy().to_string())
+}
+
 /// Открывает мультиплеерную кампанию по room_id
 #[tauri::command]
 #[specta::specta]
@@ -373,6 +442,8 @@ pub async fn open_multiplayer_campaign(
             .and_then(|v| v.parse::<i32>().ok())
             .unwrap_or_else(|| dnd_db::now_unix()),
         last_opened_at: Some(dnd_db::now_unix()),
+        campaign_type: CampaignType::Local,
+        server_config: None,
     };
 
     // Устанавливаем как активную

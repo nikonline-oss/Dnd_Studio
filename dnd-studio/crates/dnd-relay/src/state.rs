@@ -1,7 +1,7 @@
-use crate::protocol::{Envelope, RoomInfo};
+use crate::campaign_manager::CampaignManager;
+use crate::protocol::Envelope;
 use crate::room::Room;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 
@@ -9,12 +9,10 @@ use tokio::sync::{broadcast, RwLock};
 pub const MAX_ROOMS: usize = 100;
 pub const MAX_PARTICIPANTS_PER_ROOM: i32 = 20;
 pub const MAX_MESSAGE_SIZE_BYTES: usize = 64 * 1024;
-pub const MAX_CAMPAIGN_FILE_SIZE_BYTES: usize = 100 * 1024 * 1024; // 100 MB
+pub const MAX_CAMPAIGN_FILE_SIZE_BYTES: usize = 100 * 1024 * 1024;
 pub const HEARTBEAT_INTERVAL_SECS: u64 = 15;
 pub const CONNECTION_TIMEOUT_SECS: u64 = 45;
 pub const INACTIVE_ROOM_TTL_SECS: u64 = 3600;
-pub const RATE_LIMIT_CONNECTIONS_PER_MIN: u32 = 10;
-pub const RATE_LIMIT_MESSAGES_PER_MIN: u32 = 100;
 
 const BROADCAST_CAPACITY: usize = 256;
 
@@ -23,10 +21,8 @@ const BROADCAST_CAPACITY: usize = 256;
 pub struct RoomState {
     pub room: Room,
     pub tx: broadcast::Sender<Envelope>,
-    /// Путь к файлу кампании (если загружен)
-    pub campaign_file_path: Option<PathBuf>,
-    /// Размер файла кампании в байтах
-    pub campaign_file_size: Option<u64>,
+    /// ID кампании на сервере (используется для CampaignManager)
+    pub campaign_id: Option<String>,
 }
 
 /// Глобальное состояние сервера
@@ -34,20 +30,21 @@ pub struct RoomState {
 pub struct AppState {
     pub rooms: Arc<RwLock<HashMap<String, RoomState>>>,
     pub started_at: i64,
-    /// Директория для хранения файлов кампаний
-    pub campaign_storage_dir: PathBuf,
+    /// Менеджер кампаний — управление загрузкой и фильтрацией данных
+    pub campaign_manager: Arc<CampaignManager>,
 }
 
 impl AppState {
     pub fn new() -> Self {
-        // Создаём директорию для хранения кампаний
         let storage_dir = std::env::temp_dir().join("dnd_relay_campaigns");
         std::fs::create_dir_all(&storage_dir).ok();
+
+        let campaign_manager = Arc::new(CampaignManager::new(storage_dir));
 
         Self {
             rooms: Arc::new(RwLock::new(HashMap::new())),
             started_at: chrono::Utc::now().timestamp_millis(),
-            campaign_storage_dir: storage_dir,
+            campaign_manager,
         }
     }
 
@@ -55,7 +52,7 @@ impl AppState {
         let mut rooms = self.rooms.write().await;
 
         if rooms.len() >= MAX_ROOMS {
-            return Err("Server is full: maximum number of rooms reached".to_string());
+            return Err("Server is full".to_string());
         }
 
         let room_id = room.room_id.clone();
@@ -66,8 +63,7 @@ impl AppState {
             RoomState {
                 room,
                 tx,
-                campaign_file_path: None,
-                campaign_file_size: None,
+                campaign_id: None,
             },
         );
 
@@ -79,33 +75,44 @@ impl AppState {
         rooms.get(room_id).map(|rs| rs.room.clone())
     }
 
-    pub async fn subscribe_room(&self, room_id: &str) -> Option<broadcast::Receiver<Envelope>> {
+    pub async fn subscribe_room(
+        &self,
+        room_id: &str,
+    ) -> Option<broadcast::Receiver<Envelope>> {
         let rooms = self.rooms.read().await;
         rooms.get(room_id).map(|rs| rs.tx.subscribe())
     }
 
-    pub async fn broadcast_to_room(&self, room_id: &str, envelope: Envelope) -> Result<usize, String> {
+    pub async fn broadcast_to_room(
+        &self,
+        room_id: &str,
+        envelope: Envelope,
+    ) -> Result<usize, String> {
         let rooms = self.rooms.read().await;
-        let room_state = rooms
-            .get(room_id)
-            .ok_or_else(|| "Room not found".to_string())?;
+        let room_state = rooms.get(room_id).ok_or("Room not found")?;
+        room_state.tx.send(envelope).map_err(|e| e.to_string())
+    }
 
-        room_state
-            .tx
-            .send(envelope)
-            .map_err(|e| format!("Broadcast failed: {}", e))
+    /// Назначает кампанию комнате
+    pub async fn set_room_campaign(
+        &self,
+        room_id: &str,
+        campaign_id: String,
+    ) -> Result<(), String> {
+        let mut rooms = self.rooms.write().await;
+        let room_state = rooms.get_mut(room_id).ok_or("Room not found")?;
+        room_state.campaign_id = Some(campaign_id);
+        Ok(())
+    }
+
+    /// Возвращает ID кампании для комнаты
+    pub async fn get_room_campaign_id(&self, room_id: &str) -> Option<String> {
+        let rooms = self.rooms.read().await;
+        rooms.get(room_id).and_then(|rs| rs.campaign_id.clone())
     }
 
     pub async fn remove_room(&self, room_id: &str) {
         let mut rooms = self.rooms.write().await;
-
-        // Удаляем файл кампании если есть
-        if let Some(room_state) = rooms.get(room_id) {
-            if let Some(path) = &room_state.campaign_file_path {
-                std::fs::remove_file(path).ok();
-            }
-        }
-
         rooms.remove(room_id);
     }
 
@@ -131,68 +138,5 @@ impl AppState {
         for room_id in rooms_to_remove {
             self.remove_room(&room_id).await;
         }
-    }
-
-    /// Сохраняет файл кампании для комнаты
-    pub async fn store_campaign_file(
-        &self,
-        room_id: &str,
-        data: Vec<u8>,
-    ) -> Result<u64, String> {
-        if data.len() > MAX_CAMPAIGN_FILE_SIZE_BYTES {
-            return Err(format!(
-                "Campaign file too large: {} bytes (max {} bytes)",
-                data.len(),
-                MAX_CAMPAIGN_FILE_SIZE_BYTES
-            ));
-        }
-
-        let file_path = self.campaign_storage_dir.join(format!("{}.db", room_id));
-
-        std::fs::write(&file_path, &data)
-            .map_err(|e| format!("Failed to write campaign file: {}", e))?;
-
-        let file_size = data.len() as u64;
-
-        let mut rooms = self.rooms.write().await;
-        if let Some(room_state) = rooms.get_mut(room_id) {
-            room_state.campaign_file_path = Some(file_path);
-            room_state.campaign_file_size = Some(file_size);
-        }
-
-        Ok(file_size)
-    }
-
-    /// Читает файл кампании для комнаты
-    pub async fn read_campaign_file(&self, room_id: &str) -> Result<Vec<u8>, String> {
-        let rooms = self.rooms.read().await;
-        let room_state = rooms
-            .get(room_id)
-            .ok_or_else(|| "Room not found".to_string())?;
-
-        let file_path = room_state
-            .campaign_file_path
-            .as_ref()
-            .ok_or_else(|| "Campaign file not uploaded".to_string())?;
-
-        std::fs::read(file_path)
-            .map_err(|e| format!("Failed to read campaign file: {}", e))
-    }
-
-    /// Проверяет, есть ли файл кампании
-    pub async fn has_campaign_file(&self, room_id: &str) -> bool {
-        let rooms = self.rooms.read().await;
-        rooms
-            .get(room_id)
-            .map(|rs| rs.campaign_file_path.is_some())
-            .unwrap_or(false)
-    }
-
-    /// Возвращает размер файла кампании
-    pub async fn get_campaign_file_size(&self, room_id: &str) -> Option<u64> {
-        let rooms = self.rooms.read().await;
-        rooms
-            .get(room_id)
-            .and_then(|rs| rs.campaign_file_size)
     }
 }
